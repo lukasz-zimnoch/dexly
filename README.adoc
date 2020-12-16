@@ -1,0 +1,11 @@
+= Dexly
+
+Cryptocurrency trading bot working on decentralized exchanges.
+
+== Prerequisites
+
+Work in progress...
+
+== How to run
+
+Work in progress...
