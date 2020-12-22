@@ -1,6 +1,6 @@
 = Dexly
 
-Cryptocurrency trading bot working on decentralized exchanges.
+Cryptocurrency trading bot.
 
 == Prerequisites
 
