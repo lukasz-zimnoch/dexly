@@ -2,25 +2,19 @@ package binance
 
 import (
 	"context"
-	"fmt"
 	"github.com/adshao/go-binance"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core"
+	log "github.com/sirupsen/logrus"
 	"time"
 )
 
-// TODO: extract those constants
-const (
-	exchangeName = "binance"
-	interval     = "1m"
-	apiKey       = "?"
-	secretKey    = "?"
-)
+const exchangeName = "binance"
 
 type Client struct {
 	delegate *binance.Client
 }
 
-func NewClient() *Client {
+func NewClient(apiKey, secretKey string) *Client {
 	return &Client{
 		delegate: binance.NewClient(apiKey, secretKey),
 	}
@@ -28,8 +22,16 @@ func NewClient() *Client {
 
 func (c *Client) CandlesTicker(
 	ctx context.Context,
-	symbol string,
+	filter *core.CandleFilter,
 ) (chan *core.CandleTick, error) {
+	contextLogger := log.WithFields(
+		log.Fields{
+			"exchange": exchangeName,
+			"symbol":   filter.Symbol,
+			"interval": filter.Interval,
+		},
+	)
+
 	tickChannel := make(chan *core.CandleTick) // TODO: should be buffered?
 
 	eventHandler := func(event *binance.WsKlineEvent) {
@@ -51,12 +53,12 @@ func (c *Client) CandlesTicker(
 	}
 
 	errorHandler := func(err error) {
-		fmt.Printf("received error: [%v]", err)
+		contextLogger.Error("error from candles ticker: [%v]", err)
 	}
 
 	_, stopChannel, err := binance.WsKlineServe(
-		symbol,
-		interval,
+		filter.Symbol,
+		filter.Interval,
 		eventHandler,
 		errorHandler,
 	)
@@ -74,12 +76,15 @@ func (c *Client) CandlesTicker(
 
 func (c *Client) Candles(
 	ctx context.Context,
-	symbol string,
+	filter *core.CandleFilter,
 ) ([]*core.Candle, error) {
 	klines, err := c.delegate.
 		NewKlinesService().
-		Symbol(symbol).
-		Interval(interval).
+		Symbol(filter.Symbol).
+		Interval(filter.Interval).
+		StartTime(filter.StartTime.UnixNano() / 1e6).
+		EndTime(filter.EndTime.UnixNano() / 1e6).
+		Limit(1000).
 		Do(ctx)
 	if err != nil {
 		return nil, err
@@ -90,7 +95,7 @@ func (c *Client) Candles(
 		kline := klines[index]
 
 		candles[index] = &core.Candle{
-			Symbol:     symbol,
+			Symbol:     filter.Symbol,
 			Exchange:   exchangeName,
 			OpenTime:   parseMilliseconds(kline.OpenTime),
 			CloseTime:  parseMilliseconds(kline.CloseTime),

@@ -1,9 +1,9 @@
 package core
 
 import (
-	"fmt"
 	"github.com/sdcoffey/big"
 	technical "github.com/sdcoffey/techan"
+	log "github.com/sirupsen/logrus"
 )
 
 type analyser struct {
@@ -31,7 +31,13 @@ func (a *analyser) addCandle(candle *Candle) {
 		a.timeSeries.AddCandle(newCandle)
 	}
 
-	fmt.Printf("last candle [%+v]\n", a.timeSeries.LastCandle().String())
+	// FIXME: temporary debug log
+	newLastCandle := a.timeSeries.LastCandle()
+	log.WithFields(log.Fields{
+		"period": newLastCandle.Period.String(),
+		"close":  newLastCandle.ClosePrice,
+		"volume": newLastCandle.Volume,
+	}).Debugf("candle update registered")
 }
 
 func convertTechnicalCandle(candle *Candle) *technical.Candle {
@@ -40,16 +46,16 @@ func convertTechnicalCandle(candle *Candle) *technical.Candle {
 		End:   candle.CloseTime,
 	}
 
-	timeSeriesCandle := technical.NewCandle(period)
+	technicalCandle := technical.NewCandle(period)
 
-	timeSeriesCandle.OpenPrice = big.NewFromString(candle.OpenPrice)
-	timeSeriesCandle.ClosePrice = big.NewFromString(candle.ClosePrice)
-	timeSeriesCandle.MaxPrice = big.NewFromString(candle.MaxPrice)
-	timeSeriesCandle.MinPrice = big.NewFromString(candle.MinPrice)
-	timeSeriesCandle.Volume = big.NewFromString(candle.Volume)
-	timeSeriesCandle.TradeCount = candle.TradeCount
+	technicalCandle.OpenPrice = big.NewFromString(candle.OpenPrice)
+	technicalCandle.ClosePrice = big.NewFromString(candle.ClosePrice)
+	technicalCandle.MaxPrice = big.NewFromString(candle.MaxPrice)
+	technicalCandle.MinPrice = big.NewFromString(candle.MinPrice)
+	technicalCandle.Volume = big.NewFromString(candle.Volume)
+	technicalCandle.TradeCount = candle.TradeCount
 
-	return timeSeriesCandle
+	return technicalCandle
 }
 
 func areEqualTechnicalCandles(one, two *technical.Candle) bool {
