@@ -10,8 +10,9 @@ type Config struct {
 }
 
 type Binance struct {
-	ApiKey    string `yaml:"apiKey"`
-	SecretKey string `yaml:"secretKey"`
+	ApiKey    string   `yaml:"apiKey"`
+	SecretKey string   `yaml:"secretKey"`
+	Pairs     []string `yaml:"pairs"`
 }
 
 func ReadConfig(configPath string) (*Config, error) {

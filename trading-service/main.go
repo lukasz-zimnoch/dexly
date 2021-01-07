@@ -20,10 +20,8 @@ func main() {
 	configPath := os.Getenv("CONFIG")
 	config, err := configs.ReadConfig(configPath)
 	if err != nil {
-		log.Fatalf("could not read config")
+		log.Fatalf("could not read config: [%v]", err)
 	}
-
-	log.Infof("starting trading job")
 
 	job.RunTrading(ctx, config)
 
@@ -41,7 +39,7 @@ func configureLogging() {
 
 	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "could not parse log level")
+		_, _ = fmt.Fprintf(os.Stderr, "could not parse log level: [%v]", err)
 		os.Exit(1)
 	}
 

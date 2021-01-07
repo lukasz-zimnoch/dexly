@@ -16,6 +16,7 @@ func newAnalyser() *analyser {
 	}
 }
 
+// TODO: remove the oldest candle
 func (a *analyser) addCandle(candle *Candle) {
 	lastCandle := a.timeSeries.LastCandle()
 	newCandle := convertTechnicalCandle(candle)

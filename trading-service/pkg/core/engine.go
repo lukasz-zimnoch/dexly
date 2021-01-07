@@ -7,13 +7,15 @@ import (
 )
 
 type CandleFilter struct {
-	Symbol    string
+	Pair      string
 	Interval  string
 	StartTime time.Time
 	EndTime   time.Time
 }
 
 type ExchangeClient interface {
+	Name() string
+
 	Candles(
 		ctx context.Context,
 		filter *CandleFilter,
@@ -30,16 +32,19 @@ type TradingEngine struct {
 }
 
 func NewTradingEngine(exchange ExchangeClient) *TradingEngine {
-	return &TradingEngine{exchange}
+	return &TradingEngine{
+		exchange: exchange,
+	}
 }
 
-func (te *TradingEngine) Observe(ctx context.Context, symbol string) {
-	analyser := newAnalyser()
+func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
+	tradingCtx, cancelTradingCtx := context.WithCancel(ctx)
+	defer cancelTradingCtx()
 
 	now := time.Now()
 
 	filter := &CandleFilter{
-		Symbol:    symbol,
+		Pair:      pair,
 		Interval:  "1m",
 		StartTime: now.Add(-12 * time.Hour), // TODO: extend to 24h
 		EndTime:   now,
@@ -47,34 +52,71 @@ func (te *TradingEngine) Observe(ctx context.Context, symbol string) {
 
 	contextLogger := log.WithFields(
 		log.Fields{
-			"symbol":    filter.Symbol,
-			"interval":  filter.Interval,
-			"startTime": filter.StartTime.Format(time.RFC3339),
-			"endTime":   filter.EndTime.Format(time.RFC3339),
+			"exchange": te.exchange.Name(),
+			"pair":     filter.Pair,
+			"interval": filter.Interval,
 		},
 	)
 
-	candles, err := te.exchange.Candles(ctx, filter)
+	contextLogger.Infof("starting trading engine")
+	defer contextLogger.Infof("terminating trading engine")
+
+	analyser := newAnalyser()
+
+	candles, err := te.exchange.Candles(tradingCtx, filter)
 	if err != nil {
-		contextLogger.Errorf("could not get candles: [%v]", err)
+		contextLogger.Errorf(
+			"trading engine failed to get candles: [%v]",
+			err,
+		)
+		return
 	}
 
-	contextLogger.Debugf("fetched [%v] historical candles", len(candles))
+	contextLogger.Debugf(
+		"trading engine fetched [%v] historical candles",
+		len(candles),
+	)
 
 	for _, candle := range candles {
 		analyser.addCandle(candle)
 	}
 
-	candlesTicker, err := te.exchange.CandlesTicker(ctx, filter)
+	candlesTicker, err := te.exchange.CandlesTicker(tradingCtx, filter)
 	if err != nil {
-		contextLogger.Errorf("could not get candles ticker: [%v]", err)
+		contextLogger.Errorf(
+			"trading engine failed to get candles ticker: [%v]",
+			err,
+		)
+		return
 	}
+
+	tickTimeout := 10 * time.Second
+	tickTimeoutTimer := time.NewTimer(tickTimeout)
 
 	for {
 		select {
-		case candleTick := <-candlesTicker:
+		case candleTick, more := <-candlesTicker:
+			if !more {
+				contextLogger.Errorf(
+					"trading engine detected candles ticker termination",
+				)
+				cancelTradingCtx()
+				continue
+			}
+
 			analyser.addCandle(candleTick.Candle)
-		case <-ctx.Done():
+
+			if !tickTimeoutTimer.Stop() {
+				<-tickTimeoutTimer.C
+			}
+			tickTimeoutTimer.Reset(tickTimeout)
+		case <-tickTimeoutTimer.C:
+			contextLogger.Errorf(
+				"trading engine detected candle tick timeout expiration",
+			)
+			cancelTradingCtx()
+		case <-tradingCtx.Done():
+			contextLogger.Infof("trading engine context is done")
 			return
 		}
 	}

@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const exchangeName = "binance"
-
 type Client struct {
 	delegate *binance.Client
 }
@@ -20,58 +18,91 @@ func NewClient(apiKey, secretKey string) *Client {
 	}
 }
 
+func (c *Client) Name() string {
+	return "binance"
+}
+
 func (c *Client) CandlesTicker(
 	ctx context.Context,
 	filter *core.CandleFilter,
 ) (chan *core.CandleTick, error) {
+	tickerCtx, cancelTickerCtx := context.WithCancel(ctx)
+
 	contextLogger := log.WithFields(
 		log.Fields{
-			"exchange": exchangeName,
-			"symbol":   filter.Symbol,
+			"exchange": c.Name(),
+			"pair":     filter.Pair,
 			"interval": filter.Interval,
 		},
 	)
 
-	tickChannel := make(chan *core.CandleTick) // TODO: should be buffered?
+	eventChannel := make(chan *binance.WsKlineEvent)
 
 	eventHandler := func(event *binance.WsKlineEvent) {
-		tickChannel <- &core.CandleTick{
-			Candle: &core.Candle{
-				Symbol:     event.Symbol,
-				Exchange:   exchangeName,
-				OpenTime:   parseMilliseconds(event.Kline.StartTime),
-				CloseTime:  parseMilliseconds(event.Kline.EndTime),
-				OpenPrice:  event.Kline.Open,
-				ClosePrice: event.Kline.Close,
-				MaxPrice:   event.Kline.High,
-				MinPrice:   event.Kline.Low,
-				Volume:     event.Kline.Volume,
-				TradeCount: uint(event.Kline.TradeNum),
-			},
-			TickTime: parseMilliseconds(event.Time),
-		}
+		eventChannel <- event
 	}
 
 	errorHandler := func(err error) {
-		contextLogger.Error("error from candles ticker: [%v]", err)
+		contextLogger.Error("candles ticker received an error: [%v]", err)
+		cancelTickerCtx()
 	}
 
-	_, stopChannel, err := binance.WsKlineServe(
-		filter.Symbol,
+	doneChannel, stopChannel, err := binance.WsKlineServe(
+		filter.Pair,
 		filter.Interval,
 		eventHandler,
 		errorHandler,
 	)
 	if err != nil {
+		cancelTickerCtx()
 		return nil, err
 	}
 
+	tickChannel := make(chan *core.CandleTick)
+
 	go func() {
-		<-ctx.Done()
-		stopChannel <- struct{}{}
+		contextLogger.Infof("starting candles ticker")
+		defer contextLogger.Infof("terminating candles ticker")
+
+	eventLoop:
+		for {
+			select {
+			case event := <-eventChannel:
+				tickChannel <- c.parseKlineEvent(event)
+			case <-doneChannel:
+				contextLogger.Infof(
+					"candles ticker connection has been terminated",
+				)
+				break eventLoop
+			case <-tickerCtx.Done():
+				contextLogger.Infof("candles ticker context is done")
+				break eventLoop
+			}
+		}
+
+		close(stopChannel) // stop the websocket connection if not done yet
+		close(tickChannel) // notify clients about ticker termination
 	}()
 
 	return tickChannel, nil
+}
+
+func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *core.CandleTick {
+	return &core.CandleTick{
+		Candle: &core.Candle{
+			Pair:       event.Symbol,
+			Exchange:   c.Name(),
+			OpenTime:   parseMilliseconds(event.Kline.StartTime),
+			CloseTime:  parseMilliseconds(event.Kline.EndTime),
+			OpenPrice:  event.Kline.Open,
+			ClosePrice: event.Kline.Close,
+			MaxPrice:   event.Kline.High,
+			MinPrice:   event.Kline.Low,
+			Volume:     event.Kline.Volume,
+			TradeCount: uint(event.Kline.TradeNum),
+		},
+		TickTime: parseMilliseconds(event.Time),
+	}
 }
 
 func (c *Client) Candles(
@@ -80,7 +111,7 @@ func (c *Client) Candles(
 ) ([]*core.Candle, error) {
 	klines, err := c.delegate.
 		NewKlinesService().
-		Symbol(filter.Symbol).
+		Symbol(filter.Pair).
 		Interval(filter.Interval).
 		StartTime(filter.StartTime.UnixNano() / 1e6).
 		EndTime(filter.EndTime.UnixNano() / 1e6).
@@ -95,8 +126,8 @@ func (c *Client) Candles(
 		kline := klines[index]
 
 		candles[index] = &core.Candle{
-			Symbol:     filter.Symbol,
-			Exchange:   exchangeName,
+			Pair:       filter.Pair,
+			Exchange:   c.Name(),
 			OpenTime:   parseMilliseconds(kline.OpenTime),
 			CloseTime:  parseMilliseconds(kline.CloseTime),
 			OpenPrice:  kline.Open,

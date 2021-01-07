@@ -9,9 +9,16 @@ import (
 )
 
 func RunTrading(ctx context.Context, config *configs.Config) {
-	log.Infof("creating trading engine")
+	log.Infof("starting trading job")
+	runBinanceTrading(ctx, &config.Binance)
+}
 
-	exchange := binance.NewClient(config.Binance.ApiKey, config.Binance.SecretKey)
+func runBinanceTrading(ctx context.Context, config *configs.Binance) {
+	exchange := binance.NewClient(config.ApiKey, config.SecretKey)
 	engine := core.NewTradingEngine(exchange)
-	engine.Observe(ctx, "ETHUSDT") // TODO: symbols from config
+
+	for _, pair := range config.Pairs {
+		// TODO: implement restarts
+		go engine.RunTrading(ctx, pair)
+	}
 }

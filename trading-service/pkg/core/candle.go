@@ -5,7 +5,7 @@ import (
 )
 
 type Candle struct {
-	Symbol     string
+	Pair       string
 	Exchange   string
 	OpenTime   time.Time
 	CloseTime  time.Time
