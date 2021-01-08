@@ -18,7 +18,6 @@ func runBinanceTrading(ctx context.Context, config *configs.Binance) {
 	engine := core.NewTradingEngine(exchange)
 
 	for _, pair := range config.Pairs {
-		// TODO: implement restarts
-		go engine.RunTrading(ctx, pair)
+		engine.RunTrading(ctx, pair)
 	}
 }

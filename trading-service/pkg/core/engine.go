@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const traderBackoff = 10 * time.Second
+
 type CandleFilter struct {
 	Pair      string
 	Interval  string
@@ -38,8 +40,23 @@ func NewTradingEngine(exchange ExchangeClient) *TradingEngine {
 }
 
 func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
-	tradingCtx, cancelTradingCtx := context.WithCancel(ctx)
-	defer cancelTradingCtx()
+	// TODO: prevent multiple traders on same pair
+
+	go func() {
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+
+			te.runTrader(ctx, pair)
+			time.Sleep(traderBackoff)
+		}
+	}()
+}
+
+func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
+	traderCtx, cancelTraderCtx := context.WithCancel(ctx)
+	defer cancelTraderCtx()
 
 	now := time.Now()
 
@@ -58,22 +75,22 @@ func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
 		},
 	)
 
-	contextLogger.Infof("starting trading engine")
-	defer contextLogger.Infof("terminating trading engine")
+	contextLogger.Infof("starting trader")
+	defer contextLogger.Infof("terminating trader")
 
 	analyser := newAnalyser()
 
-	candles, err := te.exchange.Candles(tradingCtx, filter)
+	candles, err := te.exchange.Candles(traderCtx, filter)
 	if err != nil {
 		contextLogger.Errorf(
-			"trading engine failed to get candles: [%v]",
+			"trader failed to get candles: [%v]",
 			err,
 		)
 		return
 	}
 
 	contextLogger.Debugf(
-		"trading engine fetched [%v] historical candles",
+		"trader fetched [%v] historical candles",
 		len(candles),
 	)
 
@@ -81,10 +98,10 @@ func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
 		analyser.addCandle(candle)
 	}
 
-	candlesTicker, err := te.exchange.CandlesTicker(tradingCtx, filter)
+	candlesTicker, err := te.exchange.CandlesTicker(traderCtx, filter)
 	if err != nil {
 		contextLogger.Errorf(
-			"trading engine failed to get candles ticker: [%v]",
+			"trader failed to get candles ticker: [%v]",
 			err,
 		)
 		return
@@ -98,9 +115,9 @@ func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
 		case candleTick, more := <-candlesTicker:
 			if !more {
 				contextLogger.Errorf(
-					"trading engine detected candles ticker termination",
+					"trader detected candles ticker termination",
 				)
-				cancelTradingCtx()
+				cancelTraderCtx()
 				continue
 			}
 
@@ -111,12 +128,10 @@ func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
 			}
 			tickTimeoutTimer.Reset(tickTimeout)
 		case <-tickTimeoutTimer.C:
-			contextLogger.Errorf(
-				"trading engine detected candle tick timeout expiration",
-			)
-			cancelTradingCtx()
-		case <-tradingCtx.Done():
-			contextLogger.Infof("trading engine context is done")
+			contextLogger.Errorf("trader detected tick timeout expiration")
+			cancelTraderCtx()
+		case <-traderCtx.Done():
+			contextLogger.Infof("trader context is done")
 			return
 		}
 	}
