@@ -3,42 +3,52 @@ package core
 import (
 	"github.com/sdcoffey/big"
 	technical "github.com/sdcoffey/techan"
-	log "github.com/sirupsen/logrus"
 )
 
 type analyser struct {
-	timeSeries *technical.TimeSeries
+	timeSeries        *technical.TimeSeries
+	maxTimeSeriesSize int
 }
 
-func newAnalyser() *analyser {
+func newAnalyser(maxTimeSeriesSize int) *analyser {
 	return &analyser{
-		timeSeries: technical.NewTimeSeries(),
+		timeSeries:        technical.NewTimeSeries(),
+		maxTimeSeriesSize: maxTimeSeriesSize,
 	}
 }
 
-// TODO: remove the oldest candle
-func (a *analyser) addCandle(candle *Candle) {
-	lastCandle := a.timeSeries.LastCandle()
-	newCandle := convertTechnicalCandle(candle)
+func (a *analyser) addCandles(candles ...*Candle) {
+	for _, candle := range candles {
+		lastCandle := a.timeSeries.LastCandle()
+		newCandle := convertTechnicalCandle(candle)
 
-	if lastCandle != nil && areEqualTechnicalCandles(lastCandle, newCandle) {
-		lastCandle.OpenPrice = newCandle.OpenPrice
-		lastCandle.ClosePrice = newCandle.ClosePrice
-		lastCandle.MaxPrice = newCandle.MaxPrice
-		lastCandle.MinPrice = newCandle.MinPrice
-		lastCandle.Volume = newCandle.Volume
-		lastCandle.TradeCount = newCandle.TradeCount
-	} else {
-		a.timeSeries.AddCandle(newCandle)
+		if lastCandle != nil && areEqualTechnicalCandles(lastCandle, newCandle) {
+			lastCandle.OpenPrice = newCandle.OpenPrice
+			lastCandle.ClosePrice = newCandle.ClosePrice
+			lastCandle.MaxPrice = newCandle.MaxPrice
+			lastCandle.MinPrice = newCandle.MinPrice
+			lastCandle.Volume = newCandle.Volume
+			lastCandle.TradeCount = newCandle.TradeCount
+		} else {
+			a.timeSeries.AddCandle(newCandle)
+
+			if len(a.timeSeries.Candles) > a.maxTimeSeriesSize {
+				a.deleteCandle(0)
+			}
+		}
+	}
+}
+
+func (a *analyser) deleteCandle(index int) bool {
+	if index < 0 || index >= len(a.timeSeries.Candles) {
+		return false
 	}
 
-	// FIXME: temporary debug log
-	newLastCandle := a.timeSeries.LastCandle()
-	log.WithFields(log.Fields{
-		"period": newLastCandle.Period.String(),
-		"close":  newLastCandle.ClosePrice,
-		"volume": newLastCandle.Volume,
-	}).Debugf("candle update registered")
+	copy(a.timeSeries.Candles[index:], a.timeSeries.Candles[index+1:])
+	a.timeSeries.Candles[len(a.timeSeries.Candles)-1] = nil
+	a.timeSeries.Candles = a.timeSeries.Candles[:len(a.timeSeries.Candles)-1]
+
+	return true
 }
 
 func convertTechnicalCandle(candle *Candle) *technical.Candle {

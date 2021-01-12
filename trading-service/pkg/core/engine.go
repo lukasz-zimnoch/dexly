@@ -78,8 +78,6 @@ func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
 	contextLogger.Infof("starting trader")
 	defer contextLogger.Infof("terminating trader")
 
-	analyser := newAnalyser()
-
 	candles, err := te.exchange.Candles(traderCtx, filter)
 	if err != nil {
 		contextLogger.Errorf(
@@ -94,9 +92,8 @@ func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
 		len(candles),
 	)
 
-	for _, candle := range candles {
-		analyser.addCandle(candle)
-	}
+	analyser := newAnalyser(len(candles))
+	analyser.addCandles(candles...)
 
 	candlesTicker, err := te.exchange.CandlesTicker(traderCtx, filter)
 	if err != nil {
@@ -121,7 +118,14 @@ func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
 				continue
 			}
 
-			analyser.addCandle(candleTick.Candle)
+			contextLogger.Debugf(
+				"trader received candle tick with "+
+					"open time [%v] and close price [%v]",
+				candleTick.OpenTime.Format(time.RFC3339),
+				candleTick.ClosePrice,
+			)
+
+			analyser.addCandles(candleTick.Candle)
 
 			if !tickTimeoutTimer.Stop() {
 				<-tickTimeoutTimer.C
