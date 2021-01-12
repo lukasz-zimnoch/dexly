@@ -3,10 +3,14 @@ package core
 import (
 	"context"
 	log "github.com/sirupsen/logrus"
+	"sync"
 	"time"
 )
 
-const traderBackoff = 10 * time.Second
+const (
+	traderBackoff  = 10 * time.Second
+	traderInterval = "1m"
+)
 
 type CandleFilter struct {
 	Pair      string
@@ -31,30 +35,69 @@ type ExchangeClient interface {
 
 type TradingEngine struct {
 	exchange ExchangeClient
+
+	traders      map[string]bool
+	tradersMutex sync.Mutex
 }
 
 func NewTradingEngine(exchange ExchangeClient) *TradingEngine {
 	return &TradingEngine{
 		exchange: exchange,
+		traders:  make(map[string]bool),
 	}
 }
 
-func (te *TradingEngine) RunTrading(ctx context.Context, pair string) {
-	// TODO: prevent multiple traders on same pair
+func (te *TradingEngine) ActivateTrader(ctx context.Context, pair string) {
+	te.tradersMutex.Lock()
+	defer te.tradersMutex.Unlock()
+
+	contextLogger := log.WithFields(
+		log.Fields{
+			"exchange": te.exchange.Name(),
+			"pair":     pair,
+			"interval": traderInterval,
+		},
+	)
+
+	if _, traderExists := te.traders[pair]; traderExists {
+		contextLogger.Warningf("trader is already active")
+		return
+	}
+
+	contextLogger.Infof("activating trader")
+
+	te.traders[pair] = true
 
 	go func() {
+		defer func() {
+			te.tradersMutex.Lock()
+			defer te.tradersMutex.Unlock()
+
+			contextLogger.Infof("deactivating trader")
+
+			delete(te.traders, pair)
+		}()
+
 		for {
 			if ctx.Err() != nil {
 				return
 			}
 
-			te.runTrader(ctx, pair)
+			te.runTraderInstance(ctx, pair)
+
 			time.Sleep(traderBackoff)
 		}
 	}()
 }
 
-func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
+func (te *TradingEngine) ActiveTraders() int {
+	te.tradersMutex.Lock()
+	defer te.tradersMutex.Unlock()
+
+	return len(te.traders)
+}
+
+func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 	traderCtx, cancelTraderCtx := context.WithCancel(ctx)
 	defer cancelTraderCtx()
 
@@ -62,7 +105,7 @@ func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
 
 	filter := &CandleFilter{
 		Pair:      pair,
-		Interval:  "1m",
+		Interval:  traderInterval,
 		StartTime: now.Add(-12 * time.Hour), // TODO: extend to 24h
 		EndTime:   now,
 	}
@@ -75,8 +118,8 @@ func (te *TradingEngine) runTrader(ctx context.Context, pair string) {
 		},
 	)
 
-	contextLogger.Infof("starting trader")
-	defer contextLogger.Infof("terminating trader")
+	contextLogger.Infof("running trader instance")
+	defer contextLogger.Infof("terminating trader instance")
 
 	candles, err := te.exchange.Candles(traderCtx, filter)
 	if err != nil {

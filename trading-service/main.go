@@ -24,8 +24,6 @@ func main() {
 	}
 
 	job.RunTrading(ctx, config)
-
-	<-ctx.Done()
 }
 
 func configureLogging() {
