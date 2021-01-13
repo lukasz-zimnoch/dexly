@@ -10,6 +10,7 @@ import (
 const (
 	traderBackoff  = 10 * time.Second
 	traderInterval = "1m"
+	tickTimeout    = 10 * time.Second
 )
 
 type CandleFilter struct {
@@ -147,7 +148,6 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 		return
 	}
 
-	tickTimeout := 10 * time.Second
 	tickTimeoutTimer := time.NewTimer(tickTimeout)
 
 	for {
@@ -157,8 +157,7 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 				contextLogger.Errorf(
 					"trader detected candles ticker termination",
 				)
-				cancelTraderCtx()
-				continue
+				return
 			}
 
 			contextLogger.Debugf(
@@ -180,7 +179,7 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 			tickTimeoutTimer.Reset(tickTimeout)
 		case <-tickTimeoutTimer.C:
 			contextLogger.Errorf("trader detected tick timeout expiration")
-			cancelTraderCtx()
+			return
 		case <-traderCtx.Done():
 			contextLogger.Infof("trader context is done")
 			return

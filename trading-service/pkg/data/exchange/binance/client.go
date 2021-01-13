@@ -26,8 +26,6 @@ func (c *Client) CandlesTicker(
 	ctx context.Context,
 	filter *core.CandleFilter,
 ) (chan *core.CandleTick, error) {
-	tickerCtx, cancelTickerCtx := context.WithCancel(ctx)
-
 	contextLogger := log.WithFields(
 		log.Fields{
 			"exchange": c.Name(),
@@ -37,14 +35,13 @@ func (c *Client) CandlesTicker(
 	)
 
 	eventChannel := make(chan *binance.WsKlineEvent)
-
 	eventHandler := func(event *binance.WsKlineEvent) {
 		eventChannel <- event
 	}
 
+	errorChannel := make(chan error)
 	errorHandler := func(err error) {
-		contextLogger.Error("candles ticker received an error: [%v]", err)
-		cancelTickerCtx()
+		errorChannel <- err
 	}
 
 	doneChannel, stopChannel, err := binance.WsKlineServe(
@@ -54,7 +51,6 @@ func (c *Client) CandlesTicker(
 		errorHandler,
 	)
 	if err != nil {
-		cancelTickerCtx()
 		return nil, err
 	}
 
@@ -62,26 +58,35 @@ func (c *Client) CandlesTicker(
 
 	go func() {
 		contextLogger.Infof("starting candles ticker")
-		defer contextLogger.Infof("terminating candles ticker")
 
-	eventLoop:
+		defer func() {
+			contextLogger.Infof("terminating candles ticker")
+
+			close(tickChannel) // notify clients about ticker termination
+		}()
+
 		for {
 			select {
 			case event := <-eventChannel:
 				tickChannel <- c.parseKlineEvent(event)
+			case err := <-errorChannel:
+				contextLogger.Errorf(
+					"candles ticker received an error: [%v]",
+					err,
+				)
+				close(stopChannel)
+				return
 			case <-doneChannel:
 				contextLogger.Infof(
 					"candles ticker connection has been terminated",
 				)
-				break eventLoop
-			case <-tickerCtx.Done():
+				return
+			case <-ctx.Done():
 				contextLogger.Infof("candles ticker context is done")
-				break eventLoop
+				close(stopChannel)
+				return
 			}
 		}
-
-		close(stopChannel) // stop the websocket connection if not done yet
-		close(tickChannel) // notify clients about ticker termination
 	}()
 
 	return tickChannel, nil
