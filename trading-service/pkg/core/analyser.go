@@ -8,13 +8,56 @@ import (
 type analyser struct {
 	timeSeries        *technical.TimeSeries
 	maxTimeSeriesSize int
+	tradingRecord     *technical.TradingRecord
+	strategy          technical.Strategy
 }
 
 func newAnalyser(maxTimeSeriesSize int) *analyser {
+	timeSeries := technical.NewTimeSeries()
+	strategy := createStrategy(timeSeries, maxTimeSeriesSize/2)
+
 	return &analyser{
-		timeSeries:        technical.NewTimeSeries(),
+		timeSeries:        timeSeries,
 		maxTimeSeriesSize: maxTimeSeriesSize,
+		tradingRecord:     technical.NewTradingRecord(),
+		strategy:          strategy,
 	}
+}
+
+// TODO: temporary strategy
+func createStrategy(
+	timeSeries *technical.TimeSeries,
+	unstablePeriod int,
+) technical.Strategy {
+	indicator := technical.NewClosePriceIndicator(timeSeries)
+
+	entryConstant := technical.NewConstantIndicator(1100)
+	exitConstant := technical.NewConstantIndicator(1000)
+
+	entryRule := technical.And(
+		technical.NewCrossUpIndicatorRule(entryConstant, indicator),
+		technical.PositionNewRule{})
+
+	exitRule := technical.And(
+		technical.NewCrossDownIndicatorRule(indicator, exitConstant),
+		technical.PositionOpenRule{})
+
+	return technical.RuleStrategy{
+		UnstablePeriod: unstablePeriod,
+		EntryRule:      entryRule,
+		ExitRule:       exitRule,
+	}
+}
+
+func (a *analyser) checkSignal() (*signal, bool) {
+	if shouldEnter := a.strategy.ShouldEnter(
+		a.timeSeries.LastIndex(),
+		a.tradingRecord,
+	); shouldEnter {
+		return &signal{}, true
+	}
+
+	return nil, false
 }
 
 func (a *analyser) addCandles(candles ...*Candle) {

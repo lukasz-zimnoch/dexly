@@ -170,6 +170,10 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 
 			analyser.addCandles(candleTick.Candle)
 
+			if signal, exists := analyser.checkSignal(); exists {
+				contextLogger.Infof("trader received signal [%v]", signal)
+			}
+
 			if !tickTimeoutTimer.Stop() {
 				<-tickTimeoutTimer.C
 			}

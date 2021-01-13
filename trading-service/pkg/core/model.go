@@ -21,3 +21,6 @@ type CandleTick struct {
 	*Candle
 	TickTime time.Time
 }
+
+type signal struct {
+}
