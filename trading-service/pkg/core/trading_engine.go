@@ -145,7 +145,15 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 	defer contextLogger.Infof("terminating trader instance")
 
 	candlesRegistrySize := int(filter.EndTime.Sub(filter.StartTime).Minutes())
+
+	contextLogger.Infof(
+		"creating candles registry with size [%v]",
+		candlesRegistrySize,
+	)
+
 	candlesRegistry := newCandlesRegistry(candlesRegistrySize)
+
+	contextLogger.Infof("running candles monitor")
 
 	candlesMonitorErrorChannel := runCandlesMonitor(
 		traderCtx,
@@ -154,19 +162,25 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 		candlesRegistry,
 	)
 
+	contextLogger.Infof("creating orders registry")
+
 	ordersRegistry := newOrdersRegistry()
 
-	orderRequestChannel := runOrdersManager(
+	contextLogger.Infof("running orders manager")
+
+	ordersManagerRequestsChannel := runOrdersManager(
 		traderCtx,
 		candlesRegistry,
 		ordersRegistry,
 	)
 
+	contextLogger.Infof("running orders executor")
+
 	ordersExecutorChannel := runOrdersExecutor(traderCtx, te.exchange)
 
 	for {
 		select {
-		case orderRequest := <-orderRequestChannel:
+		case orderRequest := <-ordersManagerRequestsChannel:
 			contextLogger.Infof("trader detected order request")
 
 			select {
