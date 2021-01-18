@@ -10,10 +10,32 @@ import (
 const (
 	traderBackoff  = 10 * time.Second
 	traderInterval = "1m"
-	tickTimeout    = 10 * time.Second
 )
 
-type CandleFilter struct {
+type Candle struct {
+	Pair       string
+	Exchange   string
+	OpenTime   time.Time
+	CloseTime  time.Time
+	OpenPrice  string
+	ClosePrice string
+	MaxPrice   string
+	MinPrice   string
+	Volume     string
+	TradeCount uint
+}
+
+func (c *Candle) Equal(other *Candle) bool {
+	return c.OpenTime.Equal(other.OpenTime) &&
+		c.CloseTime.Equal(other.CloseTime)
+}
+
+type CandleTick struct {
+	*Candle
+	TickTime time.Time
+}
+
+type CandlesFilter struct {
 	Pair      string
 	Interval  string
 	StartTime time.Time
@@ -25,13 +47,13 @@ type ExchangeClient interface {
 
 	Candles(
 		ctx context.Context,
-		filter *CandleFilter,
+		filter *CandlesFilter,
 	) ([]*Candle, error)
 
 	CandlesTicker(
 		ctx context.Context,
-		filter *CandleFilter,
-	) (chan *CandleTick, error)
+		filter *CandlesFilter,
+	) (<-chan *CandleTick, <-chan error)
 }
 
 type TradingEngine struct {
@@ -104,7 +126,7 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 
 	now := time.Now()
 
-	filter := &CandleFilter{
+	filter := &CandlesFilter{
 		Pair:      pair,
 		Interval:  traderInterval,
 		StartTime: now.Add(-12 * time.Hour), // TODO: extend to 24h
@@ -122,63 +144,33 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 	contextLogger.Infof("running trader instance")
 	defer contextLogger.Infof("terminating trader instance")
 
-	candles, err := te.exchange.Candles(traderCtx, filter)
-	if err != nil {
-		contextLogger.Errorf(
-			"trader failed to get candles: [%v]",
-			err,
-		)
-		return
-	}
+	candlesRegistrySize := int(filter.EndTime.Sub(filter.StartTime).Minutes())
+	candlesRegistry := newCandlesRegistry(candlesRegistrySize)
 
-	contextLogger.Debugf(
-		"trader fetched [%v] historical candles",
-		len(candles),
-	)
+	candlesMonitor := newCandlesMonitor(te.exchange)
+	candlesMonitorErrorChannel := candlesMonitor.run(traderCtx, filter, candlesRegistry)
 
-	analyser := newAnalyser(len(candles))
-	analyser.addCandles(candles...)
+	positionManager := newPositionManager()
+	orderRequestChannel := positionManager.run(traderCtx, candlesRegistry)
 
-	candlesTicker, err := te.exchange.CandlesTicker(traderCtx, filter)
-	if err != nil {
-		contextLogger.Errorf(
-			"trader failed to get candles ticker: [%v]",
-			err,
-		)
-		return
-	}
-
-	tickTimeoutTimer := time.NewTimer(tickTimeout)
+	orderExecutor := newOrderExecutor(te.exchange)
+	orderExecutorChannel := orderExecutor.run(traderCtx)
 
 	for {
 		select {
-		case candleTick, more := <-candlesTicker:
-			if !more {
-				contextLogger.Errorf(
-					"trader detected candles ticker termination",
-				)
-				return
-			}
+		case orderRequest := <-orderRequestChannel:
+			contextLogger.Infof("trader detected order request")
 
-			contextLogger.Debugf(
-				"trader received candle tick with "+
-					"open time [%v] and close price [%v]",
-				candleTick.OpenTime.Format(time.RFC3339),
-				candleTick.ClosePrice,
+			select {
+			case orderExecutorChannel <- orderRequest:
+			default:
+				contextLogger.Warningf("order executor is busy")
+			}
+		case err := <-candlesMonitorErrorChannel:
+			contextLogger.Errorf(
+				"trader detected candles monitor error: [%v]",
+				err,
 			)
-
-			analyser.addCandles(candleTick.Candle)
-
-			if signal, exists := analyser.checkSignal(); exists {
-				contextLogger.Infof("trader received signal [%v]", signal)
-			}
-
-			if !tickTimeoutTimer.Stop() {
-				<-tickTimeoutTimer.C
-			}
-			tickTimeoutTimer.Reset(tickTimeout)
-		case <-tickTimeoutTimer.C:
-			contextLogger.Errorf("trader detected tick timeout expiration")
 			return
 		case <-traderCtx.Done():
 			contextLogger.Infof("trader context is done")

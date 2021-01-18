@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/adshao/go-binance"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core"
-	log "github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -22,97 +21,9 @@ func (c *Client) Name() string {
 	return "binance"
 }
 
-func (c *Client) CandlesTicker(
-	ctx context.Context,
-	filter *core.CandleFilter,
-) (chan *core.CandleTick, error) {
-	contextLogger := log.WithFields(
-		log.Fields{
-			"exchange": c.Name(),
-			"pair":     filter.Pair,
-			"interval": filter.Interval,
-		},
-	)
-
-	eventChannel := make(chan *binance.WsKlineEvent)
-	eventHandler := func(event *binance.WsKlineEvent) {
-		eventChannel <- event
-	}
-
-	errorChannel := make(chan error)
-	errorHandler := func(err error) {
-		errorChannel <- err
-	}
-
-	doneChannel, stopChannel, err := binance.WsKlineServe(
-		filter.Pair,
-		filter.Interval,
-		eventHandler,
-		errorHandler,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	tickChannel := make(chan *core.CandleTick)
-
-	go func() {
-		contextLogger.Infof("starting candles ticker")
-
-		defer func() {
-			contextLogger.Infof("terminating candles ticker")
-
-			close(tickChannel) // notify clients about ticker termination
-		}()
-
-		for {
-			select {
-			case event := <-eventChannel:
-				tickChannel <- c.parseKlineEvent(event)
-			case err := <-errorChannel:
-				contextLogger.Errorf(
-					"candles ticker received an error: [%v]",
-					err,
-				)
-				close(stopChannel)
-				return
-			case <-doneChannel:
-				contextLogger.Infof(
-					"candles ticker connection has been terminated",
-				)
-				return
-			case <-ctx.Done():
-				contextLogger.Infof("candles ticker context is done")
-				close(stopChannel)
-				return
-			}
-		}
-	}()
-
-	return tickChannel, nil
-}
-
-func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *core.CandleTick {
-	return &core.CandleTick{
-		Candle: &core.Candle{
-			Pair:       event.Symbol,
-			Exchange:   c.Name(),
-			OpenTime:   parseMilliseconds(event.Kline.StartTime),
-			CloseTime:  parseMilliseconds(event.Kline.EndTime),
-			OpenPrice:  event.Kline.Open,
-			ClosePrice: event.Kline.Close,
-			MaxPrice:   event.Kline.High,
-			MinPrice:   event.Kline.Low,
-			Volume:     event.Kline.Volume,
-			TradeCount: uint(event.Kline.TradeNum),
-		},
-		TickTime: parseMilliseconds(event.Time),
-	}
-}
-
 func (c *Client) Candles(
 	ctx context.Context,
-	filter *core.CandleFilter,
+	filter *core.CandlesFilter,
 ) ([]*core.Candle, error) {
 	klines, err := c.delegate.
 		NewKlinesService().
@@ -145,6 +56,54 @@ func (c *Client) Candles(
 	}
 
 	return candles, nil
+}
+
+func (c *Client) CandlesTicker(
+	ctx context.Context,
+	filter *core.CandlesFilter,
+) (<-chan *core.CandleTick, <-chan error) {
+	tickChannel := make(chan *core.CandleTick)
+	errorChannel := make(chan error)
+
+	go func() {
+		_, stopChannel, err := binance.WsKlineServe(
+			filter.Pair,
+			filter.Interval,
+			func(event *binance.WsKlineEvent) {
+				tickChannel <- c.parseKlineEvent(event)
+			},
+			func(err error) {
+				errorChannel <- err
+			},
+		)
+		if err != nil {
+			errorChannel <- err
+			return
+		}
+
+		<-ctx.Done()
+		close(stopChannel)
+	}()
+
+	return tickChannel, errorChannel
+}
+
+func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *core.CandleTick {
+	return &core.CandleTick{
+		Candle: &core.Candle{
+			Pair:       event.Symbol,
+			Exchange:   c.Name(),
+			OpenTime:   parseMilliseconds(event.Kline.StartTime),
+			CloseTime:  parseMilliseconds(event.Kline.EndTime),
+			OpenPrice:  event.Kline.Open,
+			ClosePrice: event.Kline.Close,
+			MaxPrice:   event.Kline.High,
+			MinPrice:   event.Kline.Low,
+			Volume:     event.Kline.Volume,
+			TradeCount: uint(event.Kline.TradeNum),
+		},
+		TickTime: parseMilliseconds(event.Time),
+	}
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {
