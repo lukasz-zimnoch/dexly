@@ -155,7 +155,7 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 
 	contextLogger.Infof("running candles monitor")
 
-	candlesMonitorErrorChannel := runCandlesMonitor(
+	candlesMonitor := runCandlesMonitor(
 		traderCtx,
 		te.exchange,
 		filter,
@@ -168,7 +168,7 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 
 	contextLogger.Infof("running orders manager")
 
-	ordersManagerRequestsChannel := runOrdersManager(
+	ordersManager := runOrdersManager(
 		traderCtx,
 		candlesRegistry,
 		ordersRegistry,
@@ -176,19 +176,23 @@ func (te *TradingEngine) runTraderInstance(ctx context.Context, pair string) {
 
 	contextLogger.Infof("running orders executor")
 
-	ordersExecutorChannel := runOrdersExecutor(traderCtx, te.exchange)
+	ordersExecutor := runOrdersExecutor(
+		traderCtx,
+		te.exchange,
+		make(chan *orderRequest),
+	)
 
 	for {
 		select {
-		case orderRequest := <-ordersManagerRequestsChannel:
+		case orderRequest := <-ordersManager.requestChannel:
 			contextLogger.Infof("trader detected order request")
 
 			select {
-			case ordersExecutorChannel <- orderRequest:
+			case ordersExecutor.requestChannel <- orderRequest:
 			default:
 				contextLogger.Warningf("orders executor is busy")
 			}
-		case err := <-candlesMonitorErrorChannel:
+		case err := <-candlesMonitor.errorChannel:
 			contextLogger.Errorf(
 				"trader detected candles monitor error: [%v]",
 				err,

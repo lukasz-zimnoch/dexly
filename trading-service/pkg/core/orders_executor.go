@@ -4,16 +4,19 @@ import (
 	"context"
 )
 
+type ordersExecutor struct {
+	requestChannel chan<- *orderRequest
+}
+
 func runOrdersExecutor(
 	ctx context.Context,
 	exchange ExchangeClient,
-) chan<- *orderRequest {
-	incomingOrderRequestChannel := make(chan *orderRequest)
-
+	requestChannel chan *orderRequest,
+) *ordersExecutor {
 	go func() {
 		for {
 			select {
-			case _ = <-incomingOrderRequestChannel:
+			case _ = <-requestChannel:
 				// TODO: implementation
 			case <-ctx.Done():
 				return
@@ -21,5 +24,7 @@ func runOrdersExecutor(
 		}
 	}()
 
-	return incomingOrderRequestChannel
+	return &ordersExecutor{
+		requestChannel: requestChannel,
+	}
 }

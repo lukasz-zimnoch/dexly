@@ -15,12 +15,16 @@ type orderRequest struct {
 	mock int
 }
 
+type ordersManager struct {
+	requestChannel <-chan *orderRequest
+}
+
 func runOrdersManager(
 	ctx context.Context,
 	source candlesSource,
 	_ *ordersRegistry,
-) <-chan *orderRequest {
-	outgoingOrderRequestChannel := make(chan *orderRequest)
+) *ordersManager {
+	requestChannel := make(chan *orderRequest)
 
 	go func() {
 		ticker := time.NewTicker(ordersManagerTick)
@@ -36,5 +40,7 @@ func runOrdersManager(
 		}
 	}()
 
-	return outgoingOrderRequestChannel
+	return &ordersManager{
+		requestChannel: requestChannel,
+	}
 }

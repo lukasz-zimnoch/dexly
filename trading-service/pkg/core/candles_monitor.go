@@ -12,12 +12,16 @@ type candlesSink interface {
 	add(candles ...*Candle)
 }
 
+type candlesMonitor struct {
+	errorChannel <-chan error
+}
+
 func runCandlesMonitor(
 	ctx context.Context,
 	exchange ExchangeClient,
 	filter *CandlesFilter,
 	sink candlesSink,
-) <-chan error {
+) *candlesMonitor {
 	errorChannel := make(chan error)
 
 	go func() {
@@ -52,5 +56,7 @@ func runCandlesMonitor(
 		}
 	}()
 
-	return errorChannel
+	return &candlesMonitor{
+		errorChannel: errorChannel,
+	}
 }
