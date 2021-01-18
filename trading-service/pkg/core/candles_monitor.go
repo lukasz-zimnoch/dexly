@@ -12,27 +12,16 @@ type candlesSink interface {
 	add(candles ...*Candle)
 }
 
-type candlesMonitor struct {
-	exchange ExchangeClient
-}
-
-func newCandlesMonitor(
-	exchange ExchangeClient,
-) *candlesMonitor {
-	return &candlesMonitor{
-		exchange: exchange,
-	}
-}
-
-func (cm *candlesMonitor) run(
+func runCandlesMonitor(
 	ctx context.Context,
+	exchange ExchangeClient,
 	filter *CandlesFilter,
 	sink candlesSink,
 ) <-chan error {
 	errorChannel := make(chan error)
 
 	go func() {
-		candles, err := cm.exchange.Candles(ctx, filter)
+		candles, err := exchange.Candles(ctx, filter)
 		if err != nil {
 			errorChannel <- fmt.Errorf("failed to get candles: [%v]", err)
 		}
@@ -40,7 +29,7 @@ func (cm *candlesMonitor) run(
 		sink.add(candles...)
 
 		tickTimeoutTimer := time.NewTimer(tickTimeout)
-		ticker, tickerErrorChannel := cm.exchange.CandlesTicker(ctx, filter)
+		ticker, tickerErrorChannel := exchange.CandlesTicker(ctx, filter)
 
 		for {
 			select {
