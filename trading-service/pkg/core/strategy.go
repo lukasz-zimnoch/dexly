@@ -1,21 +1,46 @@
 package core
 
 import (
-	"github.com/sdcoffey/big"
+	technicalbig "github.com/sdcoffey/big"
 	technical "github.com/sdcoffey/techan"
+	"math/big"
 )
 
+type signal struct {
+	side   orderSide
+	price  *big.Float
+	amount *big.Float
+}
+
 type strategy struct {
-	index    int
+	series   *technical.TimeSeries
 	delegate technical.Strategy
 }
 
-func (s strategy) shouldEnter(registry *ordersRegistry) bool {
-	return s.delegate.ShouldEnter(s.index, registry.delegate)
-}
+func (s strategy) run(registry *ordersRegistry) (*signal, bool) {
+	currentPosition := registry.delegate.CurrentPosition()
+	lastIndex := s.series.LastIndex()
+	lastCandle := s.series.LastCandle()
 
-func (s strategy) shouldExit(registry *ordersRegistry) bool {
-	return s.delegate.ShouldExit(s.index, registry.delegate)
+	if currentPosition.IsNew() {
+		if s.delegate.ShouldEnter(lastIndex, registry.delegate) {
+			return &signal{
+				side:   BUY,
+				price:  asFloat(lastCandle.ClosePrice),
+				amount: big.NewFloat(100), // TODO: risk evaluation
+			}, true
+		}
+	} else if currentPosition.IsOpen() {
+		if s.delegate.ShouldExit(lastIndex, registry.delegate) {
+			return &signal{
+				side:   SELL,
+				price:  asFloat(lastCandle.ClosePrice),
+				amount: asFloat(currentPosition.EntranceOrder().Amount),
+			}, true
+		}
+	}
+
+	return nil, false
 }
 
 func evaluateStrategy(candles []*Candle) *strategy {
@@ -39,7 +64,7 @@ func evaluateStrategy(candles []*Candle) *strategy {
 		technical.PositionOpenRule{})
 
 	return &strategy{
-		index: series.LastIndex(),
+		series: series,
 		delegate: technical.RuleStrategy{
 			EntryRule: entryRule,
 			ExitRule:  exitRule,
@@ -55,12 +80,16 @@ func newTechnicalCandle(candle *Candle) *technical.Candle {
 
 	technicalCandle := technical.NewCandle(period)
 
-	technicalCandle.OpenPrice = big.NewFromString(candle.OpenPrice)
-	technicalCandle.ClosePrice = big.NewFromString(candle.ClosePrice)
-	technicalCandle.MaxPrice = big.NewFromString(candle.MaxPrice)
-	technicalCandle.MinPrice = big.NewFromString(candle.MinPrice)
-	technicalCandle.Volume = big.NewFromString(candle.Volume)
+	technicalCandle.OpenPrice = technicalbig.NewFromString(candle.OpenPrice)
+	technicalCandle.ClosePrice = technicalbig.NewFromString(candle.ClosePrice)
+	technicalCandle.MaxPrice = technicalbig.NewFromString(candle.MaxPrice)
+	technicalCandle.MinPrice = technicalbig.NewFromString(candle.MinPrice)
+	technicalCandle.Volume = technicalbig.NewFromString(candle.Volume)
 	technicalCandle.TradeCount = candle.TradeCount
 
 	return technicalCandle
+}
+
+func asFloat(decimal technicalbig.Decimal) *big.Float {
+	return big.NewFloat(decimal.Float())
 }

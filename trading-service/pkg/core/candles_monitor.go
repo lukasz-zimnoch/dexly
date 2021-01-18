@@ -20,7 +20,7 @@ func runCandlesMonitor(
 	ctx context.Context,
 	exchange ExchangeClient,
 	filter *CandlesFilter,
-	sink candlesSink,
+	candlesSink candlesSink,
 ) *candlesMonitor {
 	errorChannel := make(chan error)
 
@@ -30,7 +30,7 @@ func runCandlesMonitor(
 			errorChannel <- fmt.Errorf("failed to get candles: [%v]", err)
 		}
 
-		sink.add(candles...)
+		candlesSink.add(candles...)
 
 		tickTimeoutTimer := time.NewTimer(tickTimeout)
 		ticker, tickerErrorChannel := exchange.CandlesTicker(ctx, filter)
@@ -38,7 +38,7 @@ func runCandlesMonitor(
 		for {
 			select {
 			case tick := <-ticker:
-				sink.add(tick.Candle)
+				candlesSink.add(tick.Candle)
 
 				if !tickTimeoutTimer.Stop() {
 					<-tickTimeoutTimer.C
