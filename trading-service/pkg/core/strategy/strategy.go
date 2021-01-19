@@ -38,17 +38,17 @@ func (s Strategy) Propose() (*order.Order, bool) {
 		series.AddCandle(newTechnicalCandle(currentCandle))
 	}
 
-	indicator := technical.NewClosePriceIndicator(series)
-
-	entryConstant := technical.NewConstantIndicator(1300)
-	exitConstant := technical.NewConstantIndicator(1100)
+	price := technical.NewClosePriceIndicator(series)
+	priceEma := technical.NewEMAIndicator(price, 100)
 
 	entryRule := technical.And(
-		technical.NewCrossUpIndicatorRule(entryConstant, indicator),
+		newNearCrossUpIndicatorRule(priceEma, price),
 		technical.PositionNewRule{})
 
+	exitPrice := technical.NewConstantIndicator(1100)
+
 	exitRule := technical.And(
-		technical.NewCrossDownIndicatorRule(indicator, exitConstant),
+		technical.NewCrossDownIndicatorRule(price, exitPrice),
 		technical.PositionOpenRule{})
 
 	rules := technical.RuleStrategy{
@@ -113,4 +113,39 @@ func newTechnicalOrder(order *order.Order) technical.Order {
 
 func bigFloat(decimal technicalbig.Decimal) *big.Float {
 	return big.NewFloat(decimal.Float())
+}
+
+func newNearCrossUpIndicatorRule(
+	upper, lower technical.Indicator,
+) technical.Rule {
+	return nearCrossRule{
+		upper: upper,
+		lower: lower,
+		cmp:   1,
+	}
+}
+
+type nearCrossRule struct {
+	upper technical.Indicator
+	lower technical.Indicator
+	cmp   int
+}
+
+func (ncr nearCrossRule) IsSatisfied(
+	index int,
+	record *technical.TradingRecord,
+) bool {
+	if index == 0 {
+		return false
+	}
+
+	current := ncr.lower.Calculate(index).Cmp(ncr.upper.Calculate(index))
+	previous := ncr.lower.Calculate(index - 1).Cmp(ncr.upper.Calculate(index - 1))
+
+	if (current == 0 || current == ncr.cmp) &&
+		(previous == 0 || previous == -ncr.cmp) {
+		return true
+	}
+
+	return false
 }
