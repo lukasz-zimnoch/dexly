@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading-service/configs"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/job"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"os"
 )
 
@@ -20,7 +20,7 @@ func main() {
 	configPath := os.Getenv("CONFIG")
 	config, err := configs.ReadConfig(configPath)
 	if err != nil {
-		log.Fatalf("could not read config: [%v]", err)
+		logrus.Fatalf("could not read config: [%v]", err)
 	}
 
 	job.RunTrading(ctx, config)
@@ -28,20 +28,20 @@ func main() {
 
 func configureLogging() {
 	if os.Getenv("LOG_FORMAT") == "json" {
-		log.SetFormatter(&log.JSONFormatter{})
+		logrus.SetFormatter(&logrus.JSONFormatter{})
 	} else {
-		log.SetFormatter(&log.TextFormatter{
+		logrus.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 		})
 	}
 
-	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
+	logLevel, err := logrus.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "could not parse log level: [%v]", err)
 		os.Exit(1)
 	}
 
-	log.SetLevel(logLevel)
+	logrus.SetLevel(logLevel)
 
-	log.SetOutput(os.Stdout)
+	logrus.SetOutput(os.Stdout)
 }

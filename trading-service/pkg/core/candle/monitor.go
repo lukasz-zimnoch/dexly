@@ -3,6 +3,7 @@ package candle
 import (
 	"context"
 	"fmt"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"time"
 )
 
@@ -26,9 +27,21 @@ func (c *Candle) Equal(other *Candle) bool {
 		c.CloseTime.Equal(other.CloseTime)
 }
 
+func (c *Candle) String() string {
+	return fmt.Sprintf(
+		"time: %v, price: %v",
+		c.OpenTime.Format(time.RFC3339),
+		c.ClosePrice,
+	)
+}
+
 type Tick struct {
 	*Candle
 	TickTime time.Time
+}
+
+func (t *Tick) String() string {
+	return t.Candle.String()
 }
 
 type Filter struct {
@@ -58,9 +71,9 @@ type Monitor struct {
 	ErrorChannel <-chan error
 }
 
-// TODO: add logging
 func RunMonitor(
 	ctx context.Context,
+	logger logger.Logger,
 	provider Provider,
 	filter *Filter,
 	sink Sink,
@@ -74,6 +87,8 @@ func RunMonitor(
 			return
 		}
 
+		logger.Debugf("fetched [%v] historical candles", len(candles))
+
 		sink.Add(candles...)
 
 		tickTimeoutTimer := time.NewTimer(tickTimeout)
@@ -82,6 +97,8 @@ func RunMonitor(
 		for {
 			select {
 			case tick := <-ticker:
+				logger.Debugf("received candle tick [%v]", tick)
+
 				sink.Add(tick.Candle)
 
 				if !tickTimeoutTimer.Stop() {

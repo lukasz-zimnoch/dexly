@@ -27,6 +27,7 @@ func New(candleSource CandleSource) *Strategy {
 	}
 }
 
+// TODO: implement proper strategy
 func (s Strategy) Propose() (*order.Order, bool) {
 	s.recordMutex.Lock()
 	defer s.recordMutex.Unlock()
@@ -66,7 +67,7 @@ func (s Strategy) Propose() (*order.Order, bool) {
 		}, true
 	} else if rules.ShouldExit(lastIndex, s.record) {
 		return &order.Order{
-			Side:   order.BUY,
+			Side:   order.SELL,
 			Price:  lastClosePrice,
 			Amount: bigFloat(s.record.CurrentPosition().EntranceOrder().Amount),
 		}, true

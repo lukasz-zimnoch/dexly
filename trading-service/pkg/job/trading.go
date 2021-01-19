@@ -5,15 +5,15 @@ import (
 	"github.com/lukasz-zimnoch/dexly/trading-service/configs"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trading"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/data/exchange/binance"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
 const tradingEnginesActivityCheckTick = 1 * time.Minute
 
 func RunTrading(ctx context.Context, config *configs.Config) {
-	log.Infof("running trading job")
-	defer log.Infof("terminating trading job")
+	logrus.Infof("running trading job")
+	defer logrus.Infof("terminating trading job")
 
 	tradingEngines := make([]*trading.Engine, 0)
 
@@ -28,7 +28,7 @@ func RunTrading(ctx context.Context, config *configs.Config) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Infof("performing trading engines activity check")
+			logrus.Infof("performing trading engines activity check")
 
 			noActiveEngines := true
 
@@ -40,7 +40,7 @@ func RunTrading(ctx context.Context, config *configs.Config) {
 			}
 
 			if noActiveEngines {
-				log.Warningf("all trading engines are inactive")
+				logrus.Warningf("all trading engines are inactive")
 				return
 			}
 		case <-ctx.Done():

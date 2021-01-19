@@ -3,9 +3,9 @@ package trading
 import (
 	"context"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/strategy"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
 )
@@ -40,20 +40,14 @@ func (e *Engine) ActivateTrader(ctx context.Context, pair string) {
 	e.tradersMutex.Lock()
 	defer e.tradersMutex.Unlock()
 
-	contextLogger := log.WithFields(
-		log.Fields{
-			"exchange": e.exchange.Name(),
-			"pair":     pair,
-			"interval": traderInterval,
-		},
-	)
+	logger := e.newContextLogger(pair)
 
 	if _, traderExists := e.traders[pair]; traderExists {
-		contextLogger.Warningf("trader is already active")
+		logger.Warningf("trader is already active")
 		return
 	}
 
-	contextLogger.Infof("activating trader")
+	logger.Infof("activating trader")
 
 	e.traders[pair] = true
 
@@ -62,7 +56,7 @@ func (e *Engine) ActivateTrader(ctx context.Context, pair string) {
 			e.tradersMutex.Lock()
 			defer e.tradersMutex.Unlock()
 
-			contextLogger.Infof("deactivating trader")
+			logger.Infof("deactivating trader")
 
 			delete(e.traders, pair)
 		}()
@@ -72,11 +66,21 @@ func (e *Engine) ActivateTrader(ctx context.Context, pair string) {
 				return
 			}
 
-			e.runTraderInstance(ctx, pair)
+			e.runTraderInstance(ctx, logger, pair)
 
 			time.Sleep(traderBackoff)
 		}
 	}()
+}
+
+func (e *Engine) newContextLogger(pair string) logger.Logger {
+	return logger.WithFields(
+		map[string]interface{}{
+			"exchange": e.exchange.Name(),
+			"pair":     pair,
+			"interval": traderInterval,
+		},
+	)
 }
 
 func (e *Engine) ActiveTraders() int {
@@ -86,7 +90,14 @@ func (e *Engine) ActiveTraders() int {
 	return len(e.traders)
 }
 
-func (e *Engine) runTraderInstance(ctx context.Context, pair string) {
+func (e *Engine) runTraderInstance(
+	ctx context.Context,
+	logger logger.Logger,
+	pair string,
+) {
+	logger.Infof("running trader instance")
+	defer logger.Infof("terminating trader instance")
+
 	traderCtx, cancelTraderCtx := context.WithCancel(ctx)
 	defer cancelTraderCtx()
 
@@ -99,47 +110,38 @@ func (e *Engine) runTraderInstance(ctx context.Context, pair string) {
 		EndTime:   now,
 	}
 
-	contextLogger := log.WithFields(
-		log.Fields{
-			"exchange": e.exchange.Name(),
-			"pair":     filter.Pair,
-			"interval": filter.Interval,
-		},
-	)
-
-	contextLogger.Infof("running trader instance")
-	defer contextLogger.Infof("terminating trader instance")
-
 	candleRegistrySize := int(filter.EndTime.Sub(filter.StartTime).Minutes())
 
-	contextLogger.Infof(
+	logger.Infof(
 		"creating candle registry with size [%v]",
 		candleRegistrySize,
 	)
 
 	candleRegistry := candle.NewRegistry(candleRegistrySize)
 
-	contextLogger.Infof("running candle monitor")
+	logger.Infof("running candle monitor")
 
 	candleMonitor := candle.RunMonitor(
 		traderCtx,
+		logger,
 		e.exchange,
 		filter,
 		candleRegistry,
 	)
 
-	contextLogger.Infof("creating strategy")
+	logger.Infof("creating strategy")
 
 	strategyInstance := strategy.New(candleRegistry)
 
-	contextLogger.Infof("creating order registry")
+	logger.Infof("creating order registry")
 
 	orderRegistry := order.NewRegistry()
 
-	contextLogger.Infof("running order executor")
+	logger.Infof("running order executor")
 
 	orderExecutor := order.RunExecutor(
 		traderCtx,
+		logger,
 		strategyInstance,
 		orderRegistry,
 		e.exchange,
@@ -148,19 +150,19 @@ func (e *Engine) runTraderInstance(ctx context.Context, pair string) {
 	for {
 		select {
 		case err := <-candleMonitor.ErrorChannel:
-			contextLogger.Errorf(
-				"trader detected candle monitor error: [%v]",
+			logger.Errorf(
+				"candle monitor error: [%v]",
 				err,
 			)
 			return
 		case err := <-orderExecutor.ErrorChannel:
-			contextLogger.Errorf(
-				"trader detected order executor error: [%v]",
+			logger.Errorf(
+				"order executor error: [%v]",
 				err,
 			)
 			return
 		case <-traderCtx.Done():
-			contextLogger.Infof("trader context is done")
+			logger.Infof("trader context is done")
 			return
 		}
 	}

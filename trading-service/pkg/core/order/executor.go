@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"fmt"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"math/big"
 	"time"
 )
@@ -16,11 +17,31 @@ const (
 	SELL
 )
 
+func (s Side) String() string {
+	switch s {
+	case BUY:
+		return "BUY"
+	case SELL:
+		return "SELL"
+	}
+
+	return ""
+}
+
 type Order struct {
 	Side          Side
 	Price         *big.Float
 	Amount        *big.Float
 	ExecutionTime time.Time
+}
+
+func (o *Order) String() string {
+	return fmt.Sprintf(
+		"side: %v, amount: %v, price: %v",
+		o.Side,
+		o.Amount.String(),
+		o.Price.String(),
+	)
 }
 
 type Strategy interface {
@@ -36,9 +57,9 @@ type Executor struct {
 	ErrorChannel <-chan error
 }
 
-// TODO: add logging
 func RunExecutor(
 	ctx context.Context,
+	logger logger.Logger,
 	strategy Strategy,
 	registry *Registry,
 	submitter Submitter,
@@ -56,6 +77,11 @@ func RunExecutor(
 					continue
 				}
 
+				logger.Infof(
+					"executing new order [%v]",
+					order,
+				)
+
 				err := submitter.SubmitOrder(order)
 				if err != nil {
 					// TODO: handle retries
@@ -68,6 +94,11 @@ func RunExecutor(
 
 				registry.Add(order)
 				strategy.Record(order)
+
+				logger.Infof(
+					"order [%v] has been executed successfully",
+					order,
+				)
 			case <-ctx.Done():
 				return
 			}
