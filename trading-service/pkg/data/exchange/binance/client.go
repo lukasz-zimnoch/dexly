@@ -3,7 +3,8 @@ package binance
 import (
 	"context"
 	"github.com/adshao/go-binance"
-	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
 	"time"
 )
 
@@ -23,8 +24,8 @@ func (c *Client) Name() string {
 
 func (c *Client) Candles(
 	ctx context.Context,
-	filter *core.CandlesFilter,
-) ([]*core.Candle, error) {
+	filter *candle.Filter,
+) ([]*candle.Candle, error) {
 	klines, err := c.delegate.
 		NewKlinesService().
 		Symbol(filter.Pair).
@@ -37,11 +38,11 @@ func (c *Client) Candles(
 		return nil, err
 	}
 
-	candles := make([]*core.Candle, len(klines))
+	candles := make([]*candle.Candle, len(klines))
 	for index := range candles {
 		kline := klines[index]
 
-		candles[index] = &core.Candle{
+		candles[index] = &candle.Candle{
 			Pair:       filter.Pair,
 			Exchange:   c.Name(),
 			OpenTime:   parseMilliseconds(kline.OpenTime),
@@ -60,9 +61,9 @@ func (c *Client) Candles(
 
 func (c *Client) CandlesTicker(
 	ctx context.Context,
-	filter *core.CandlesFilter,
-) (<-chan *core.CandleTick, <-chan error) {
-	tickChannel := make(chan *core.CandleTick)
+	filter *candle.Filter,
+) (<-chan *candle.Tick, <-chan error) {
+	tickChannel := make(chan *candle.Tick)
 	errorChannel := make(chan error)
 
 	go func() {
@@ -88,9 +89,9 @@ func (c *Client) CandlesTicker(
 	return tickChannel, errorChannel
 }
 
-func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *core.CandleTick {
-	return &core.CandleTick{
-		Candle: &core.Candle{
+func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *candle.Tick {
+	return &candle.Tick{
+		Candle: &candle.Candle{
 			Pair:       event.Symbol,
 			Exchange:   c.Name(),
 			OpenTime:   parseMilliseconds(event.Kline.StartTime),
@@ -104,6 +105,11 @@ func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *core.CandleTick {
 		},
 		TickTime: parseMilliseconds(event.Time),
 	}
+}
+
+func (c *Client) SubmitOrder(order *order.Order) error {
+	// TODO: implementation
+	return nil
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {

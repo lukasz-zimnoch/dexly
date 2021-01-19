@@ -3,7 +3,7 @@ package job
 import (
 	"context"
 	"github.com/lukasz-zimnoch/dexly/trading-service/configs"
-	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trading"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/data/exchange/binance"
 	log "github.com/sirupsen/logrus"
 	"time"
@@ -15,7 +15,7 @@ func RunTrading(ctx context.Context, config *configs.Config) {
 	log.Infof("running trading job")
 	defer log.Infof("terminating trading job")
 
-	tradingEngines := make([]*core.TradingEngine, 0)
+	tradingEngines := make([]*trading.Engine, 0)
 
 	tradingEngines = append(
 		tradingEngines,
@@ -52,9 +52,9 @@ func RunTrading(ctx context.Context, config *configs.Config) {
 func runBinanceTrading(
 	ctx context.Context,
 	config *configs.Binance,
-) *core.TradingEngine {
+) *trading.Engine {
 	exchange := binance.NewClient(config.ApiKey, config.SecretKey)
-	engine := core.NewTradingEngine(exchange)
+	engine := trading.NewEngine(exchange)
 
 	for _, pair := range config.Pairs {
 		engine.ActivateTrader(ctx, pair)
