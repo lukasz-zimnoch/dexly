@@ -5,7 +5,6 @@ import (
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
-	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/strategy"
 	"sync"
 	"time"
 )
