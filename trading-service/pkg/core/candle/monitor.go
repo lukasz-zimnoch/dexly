@@ -63,12 +63,12 @@ type Provider interface {
 	) (<-chan *Tick, <-chan error)
 }
 
-type Sink interface {
-	Add(candles ...*Candle)
-}
-
 type Monitor struct {
-	ErrorChannel <-chan error
+	logger   logger.Logger
+	provider Provider
+	filter   *Filter
+	registry *Registry
+	errChan  chan error
 }
 
 func RunMonitor(
@@ -76,48 +76,58 @@ func RunMonitor(
 	logger logger.Logger,
 	provider Provider,
 	filter *Filter,
-	sink Sink,
+	registry *Registry,
 ) *Monitor {
-	errorChannel := make(chan error, 1)
+	monitor := &Monitor{
+		logger:   logger,
+		provider: provider,
+		filter:   filter,
+		registry: registry,
+		errChan:  make(chan error, 1),
+	}
 
-	go func() {
-		candles, err := provider.Candles(ctx, filter)
-		if err != nil {
-			errorChannel <- fmt.Errorf("failed to get candles: [%v]", err)
+	go monitor.loop(ctx)
+
+	return monitor
+}
+
+func (m *Monitor) loop(ctx context.Context) {
+	candles, err := m.provider.Candles(ctx, m.filter)
+	if err != nil {
+		m.errChan <- fmt.Errorf("failed to get candles: [%v]", err)
+		return
+	}
+
+	m.logger.Debugf("fetched [%v] historical candles", len(candles))
+
+	m.registry.AddCandles(candles...)
+
+	tickTimeoutTimer := time.NewTimer(tickTimeout)
+	ticker, tickerErrorChannel := m.provider.CandlesTicker(ctx, m.filter)
+
+	for {
+		select {
+		case tick := <-ticker:
+			m.logger.Debugf("received candle tick [%v]", tick)
+
+			m.registry.AddCandles(tick.Candle)
+
+			if !tickTimeoutTimer.Stop() {
+				<-tickTimeoutTimer.C
+			}
+			tickTimeoutTimer.Reset(tickTimeout)
+		case <-tickTimeoutTimer.C:
+			m.errChan <- fmt.Errorf("tick timeout expiration")
+			return
+		case err := <-tickerErrorChannel:
+			m.errChan <- fmt.Errorf("ticker error: [%v]", err)
+			return
+		case <-ctx.Done():
 			return
 		}
-
-		logger.Debugf("fetched [%v] historical candles", len(candles))
-
-		sink.Add(candles...)
-
-		tickTimeoutTimer := time.NewTimer(tickTimeout)
-		ticker, tickerErrorChannel := provider.CandlesTicker(ctx, filter)
-
-		for {
-			select {
-			case tick := <-ticker:
-				logger.Debugf("received candle tick [%v]", tick)
-
-				sink.Add(tick.Candle)
-
-				if !tickTimeoutTimer.Stop() {
-					<-tickTimeoutTimer.C
-				}
-				tickTimeoutTimer.Reset(tickTimeout)
-			case <-tickTimeoutTimer.C:
-				errorChannel <- fmt.Errorf("tick timeout expiration")
-				return
-			case err := <-tickerErrorChannel:
-				errorChannel <- fmt.Errorf("ticker error: [%v]", err)
-				return
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return &Monitor{
-		ErrorChannel: errorChannel,
 	}
+}
+
+func (m *Monitor) ErrChan() <-chan error {
+	return m.errChan
 }

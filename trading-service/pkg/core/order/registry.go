@@ -15,7 +15,7 @@ func NewRegistry() *Registry {
 	}
 }
 
-func (r *Registry) Add(order *Order) {
+func (r *Registry) AddOrder(order *Order) {
 	r.ordersMutex.Lock()
 	defer r.ordersMutex.Unlock()
 

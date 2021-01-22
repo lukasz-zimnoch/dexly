@@ -18,7 +18,7 @@ func NewRegistry(registrySize int) *Registry {
 	}
 }
 
-func (r *Registry) Add(candles ...*Candle) {
+func (r *Registry) AddCandles(candles ...*Candle) {
 	r.candlesMutex.Lock()
 	defer r.candlesMutex.Unlock()
 
@@ -49,7 +49,7 @@ func (r *Registry) Add(candles ...*Candle) {
 	}
 }
 
-func (r *Registry) Get() []*Candle {
+func (r *Registry) Candles() []*Candle {
 	r.candlesMutex.RLock()
 	defer r.candlesMutex.RUnlock()
 

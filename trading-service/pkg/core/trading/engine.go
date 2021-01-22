@@ -129,9 +129,9 @@ func (e *Engine) runTraderInstance(
 		candleRegistry,
 	)
 
-	logger.Infof("creating strategy")
+	logger.Infof("creating order generator")
 
-	strategyInstance := strategy.New(candleRegistry)
+	orderGenerator := order.NewGenerator(candleRegistry)
 
 	logger.Infof("creating order registry")
 
@@ -142,20 +142,20 @@ func (e *Engine) runTraderInstance(
 	orderExecutor := order.RunExecutor(
 		traderCtx,
 		logger,
-		strategyInstance,
+		orderGenerator,
 		orderRegistry,
 		e.exchange,
 	)
 
 	for {
 		select {
-		case err := <-candleMonitor.ErrorChannel:
+		case err := <-candleMonitor.ErrChan():
 			logger.Errorf(
 				"candle monitor error: [%v]",
 				err,
 			)
 			return
-		case err := <-orderExecutor.ErrorChannel:
+		case err := <-orderExecutor.ErrChan():
 			logger.Errorf(
 				"order executor error: [%v]",
 				err,
