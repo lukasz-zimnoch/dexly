@@ -47,7 +47,7 @@ func (e *Executor) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			order, ok := e.generator.Generate()
+			order, ok := e.generator.GenerateOrder()
 			if !ok {
 				continue
 			}
@@ -68,7 +68,7 @@ func (e *Executor) loop(ctx context.Context) {
 			}
 
 			e.registry.AddOrder(order)
-			e.generator.RecordExecution(order)
+			e.generator.RecordOrderExecution(order)
 
 			e.logger.Infof(
 				"order [%v] has been executed successfully",

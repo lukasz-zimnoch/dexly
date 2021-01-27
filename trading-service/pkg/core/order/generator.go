@@ -80,7 +80,7 @@ func NewGenerator(candleSource candleSource) *Generator {
 	}
 }
 
-func (s Generator) Generate() (*Order, bool) {
+func (s Generator) GenerateOrder() (*Order, bool) {
 	s.recordMutex.Lock()
 	defer s.recordMutex.Unlock()
 
@@ -90,24 +90,39 @@ func (s Generator) Generate() (*Order, bool) {
 		series.AddCandle(newTechnicalCandle(currentCandle))
 	}
 
-	strategy := evaluateStrategy(series)
-
+	currentPosition := s.record.CurrentPosition()
+	priceIndicator := technical.NewClosePriceIndicator(series)
 	lastIndex := series.LastIndex()
 	lastPrice := big.NewFloat(series.LastCandle().ClosePrice.Float())
 
-	if strategy.ShouldEnter(lastIndex, s.record) {
-		amount := big.NewFloat(100) // TODO: risk evaluation
-		return newBuyOrder(lastPrice, amount), true
-	} else if strategy.ShouldExit(lastIndex, s.record) {
-		entranceOrder := s.record.CurrentPosition().EntranceOrder()
-		amount := big.NewFloat(entranceOrder.Amount.Float())
-		return newSellOrder(lastPrice, amount), true
+	if currentPosition.IsNew() {
+		priceEma := technical.NewEMAIndicator(priceIndicator, 100)
+		entryRule := newNearCrossUpIndicatorRule(priceEma, priceIndicator)
+
+		if entryRule.IsSatisfied(lastIndex, s.record) {
+			amount := big.NewFloat(100) // TODO: risk evaluation
+			return newBuyOrder(lastPrice, amount), true
+		}
+	} else if currentPosition.IsOpen() {
+		openPrice := currentPosition.EntranceOrder().Price.Float()
+		stopLoss := technical.NewConstantIndicator(openPrice * 0.95)
+		takeProfit := technical.NewConstantIndicator(openPrice * 1.10)
+
+		exitRule := technical.Or(
+			technical.UnderIndicatorRule{priceIndicator, stopLoss},
+			technical.OverIndicatorRule{priceIndicator, takeProfit},
+		)
+
+		if exitRule.IsSatisfied(lastIndex, s.record) {
+			amount := big.NewFloat(currentPosition.EntranceOrder().Amount.Float())
+			return newSellOrder(lastPrice, amount), true
+		}
 	}
 
 	return nil, false
 }
 
-func (s *Generator) RecordExecution(order *Order) {
+func (s *Generator) RecordOrderExecution(order *Order) {
 	s.recordMutex.Lock()
 	defer s.recordMutex.Unlock()
 
@@ -140,4 +155,42 @@ func newTechnicalOrder(order *Order) technical.Order {
 		Amount:        technicalbig.NewFromString(order.Amount.String()),
 		ExecutionTime: order.CreationTime,
 	}
+}
+
+type nearCrossRule struct {
+	upper technical.Indicator
+	lower technical.Indicator
+	cmp   int
+}
+
+func newNearCrossUpIndicatorRule(
+	upper, lower technical.Indicator,
+) technical.Rule {
+	return nearCrossRule{
+		upper: upper,
+		lower: lower,
+		cmp:   1,
+	}
+}
+
+func (ncr nearCrossRule) IsSatisfied(
+	index int,
+	_ *technical.TradingRecord,
+) bool {
+	if index == 0 {
+		return false
+	}
+
+	current := ncr.lower.Calculate(index).
+		Cmp(ncr.upper.Calculate(index))
+
+	previous := ncr.lower.Calculate(index - 1).
+		Cmp(ncr.upper.Calculate(index - 1))
+
+	if (current == 0 || current == ncr.cmp) &&
+		(previous == 0 || previous == -ncr.cmp) {
+		return true
+	}
+
+	return false
 }
