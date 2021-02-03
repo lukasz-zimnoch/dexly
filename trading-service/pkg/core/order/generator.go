@@ -3,6 +3,7 @@ package order
 import (
 	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	technicalbig "github.com/sdcoffey/big"
 	technical "github.com/sdcoffey/techan"
 	"math/big"
@@ -66,67 +67,114 @@ type candleSource interface {
 	Candles() []*candle.Candle
 }
 
+type accountManager interface {
+	Balance() (*big.Float, error)
+}
+
 type Generator struct {
+	logger logger.Logger
+
 	recordMutex sync.Mutex
 	record      *technical.TradingRecord
 
-	candleSource candleSource
+	candleSource   candleSource
+	accountManager accountManager
+
+	balanceRiskFactor *big.Float
+	priceChangeFactor *big.Float
 }
 
-func NewGenerator(candleSource candleSource) *Generator {
+func NewGenerator(
+	logger logger.Logger,
+	candleSource candleSource,
+	accountManager accountManager,
+) *Generator {
 	return &Generator{
-		record:       technical.NewTradingRecord(),
-		candleSource: candleSource,
+		logger:            logger,
+		record:            technical.NewTradingRecord(),
+		candleSource:      candleSource,
+		accountManager:    accountManager,
+		balanceRiskFactor: big.NewFloat(0.02),
+		priceChangeFactor: big.NewFloat(0.1),
 	}
 }
 
-func (s Generator) GenerateOrder() (*Order, bool) {
-	s.recordMutex.Lock()
-	defer s.recordMutex.Unlock()
+func (g Generator) GenerateOrder() (*Order, bool) {
+	g.recordMutex.Lock()
+	defer g.recordMutex.Unlock()
 
 	series := technical.NewTimeSeries()
 
-	for _, currentCandle := range s.candleSource.Candles() {
+	for _, currentCandle := range g.candleSource.Candles() {
 		series.AddCandle(newTechnicalCandle(currentCandle))
 	}
 
-	currentPosition := s.record.CurrentPosition()
+	position := g.record.CurrentPosition()
 	priceIndicator := technical.NewClosePriceIndicator(series)
-	lastIndex := series.LastIndex()
-	lastPrice := big.NewFloat(series.LastCandle().ClosePrice.Float())
 
-	if currentPosition.IsNew() {
+	if position.IsNew() {
 		priceEma := technical.NewEMAIndicator(priceIndicator, 100)
 		entryRule := newNearCrossUpIndicatorRule(priceEma, priceIndicator)
 
-		if entryRule.IsSatisfied(lastIndex, s.record) {
-			amount := big.NewFloat(100) // TODO: risk evaluation
-			return newBuyOrder(lastPrice, amount), true
+		if entryRule.IsSatisfied(series.LastIndex(), g.record) {
+			g.logger.Infof("detected entry rule fulfillment")
+
+			balance, err := g.accountManager.Balance()
+			if err != nil {
+				g.logger.Errorf("could not get account balance: [%v]", err)
+				return nil, false
+			}
+
+			price := asBigFloat(priceIndicator.Calculate(series.LastIndex()))
+			priceChange := new(big.Float).Mul(price, g.priceChangeFactor)
+			balanceAtRisk := new(big.Float).Mul(balance, g.balanceRiskFactor)
+			amount := new(big.Float).Quo(balanceAtRisk, priceChange)
+
+			maxAmount := new(big.Float).Quo(balance, price)
+			if amount.Cmp(maxAmount) == 1 {
+				amount = maxAmount
+			}
+
+			return newBuyOrder(price, amount), true
 		}
-	} else if currentPosition.IsOpen() {
-		openPrice := currentPosition.EntranceOrder().Price.Float()
-		stopLoss := technical.NewConstantIndicator(openPrice * 0.95)
-		takeProfit := technical.NewConstantIndicator(openPrice * 1.10)
+	} else if position.IsOpen() {
+		priceChangeFactor, _ := g.priceChangeFactor.Float64()
+		stopLossFactor := 1 - priceChangeFactor
+		takeProfitFactor := 1 + (2 * priceChangeFactor)
+
+		entryPrice := position.EntranceOrder().Price.Float()
+		stopLoss := technical.NewConstantIndicator(entryPrice * stopLossFactor)
+		takeProfit := technical.NewConstantIndicator(entryPrice * takeProfitFactor)
 
 		exitRule := technical.Or(
-			technical.UnderIndicatorRule{priceIndicator, stopLoss},
-			technical.OverIndicatorRule{priceIndicator, takeProfit},
+			technical.UnderIndicatorRule{
+				First:  priceIndicator,
+				Second: stopLoss,
+			},
+			technical.OverIndicatorRule{
+				First:  priceIndicator,
+				Second: takeProfit,
+			},
 		)
 
-		if exitRule.IsSatisfied(lastIndex, s.record) {
-			amount := big.NewFloat(currentPosition.EntranceOrder().Amount.Float())
-			return newSellOrder(lastPrice, amount), true
+		if exitRule.IsSatisfied(series.LastIndex(), g.record) {
+			g.logger.Infof("detected exit rule fulfillment")
+
+			price := asBigFloat(priceIndicator.Calculate(series.LastIndex()))
+			amount := asBigFloat(position.EntranceOrder().Amount)
+
+			return newSellOrder(price, amount), true
 		}
 	}
 
 	return nil, false
 }
 
-func (s *Generator) RecordOrderExecution(order *Order) {
-	s.recordMutex.Lock()
-	defer s.recordMutex.Unlock()
+func (g *Generator) RecordOrderExecution(order *Order) {
+	g.recordMutex.Lock()
+	defer g.recordMutex.Unlock()
 
-	s.record.Operate(newTechnicalOrder(order))
+	g.record.Operate(newTechnicalOrder(order))
 }
 
 func newTechnicalCandle(candle *candle.Candle) *technical.Candle {
@@ -155,6 +203,10 @@ func newTechnicalOrder(order *Order) technical.Order {
 		Amount:        technicalbig.NewFromString(order.Amount.String()),
 		ExecutionTime: order.CreationTime,
 	}
+}
+
+func asBigFloat(value technicalbig.Decimal) *big.Float {
+	return big.NewFloat(value.Float())
 }
 
 type nearCrossRule struct {

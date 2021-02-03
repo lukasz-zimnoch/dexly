@@ -6,6 +6,7 @@ import (
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trading"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/data/exchange/binance"
 	"github.com/sirupsen/logrus"
+	"strings"
 	"time"
 )
 
@@ -57,8 +58,17 @@ func runBinanceTrading(
 	engine := trading.NewEngine(exchange)
 
 	for _, pair := range config.Pairs {
-		engine.ActivateTrader(ctx, pair)
+		engine.ActivateTrader(ctx, parsePair(pair))
 	}
 
 	return engine
+}
+
+func parsePair(pair string) trading.Pair {
+	symbols := strings.Split(pair, "/")
+
+	return trading.Pair{
+		Base:  symbols[0],
+		Quote: symbols[1],
+	}
 }

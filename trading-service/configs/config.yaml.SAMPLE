@@ -2,4 +2,4 @@ binance:
   apiKey: "binanceApiKey"
   secretKey: "binanceSecretKey"
   pairs:
-    - "ETHUSDT"
+    - "ETH/USDT"

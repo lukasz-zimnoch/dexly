@@ -2,9 +2,11 @@ package binance
 
 import (
 	"context"
+	"fmt"
 	"github.com/adshao/go-binance"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
+	"math/big"
 	"time"
 )
 
@@ -110,6 +112,32 @@ func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *candle.Tick {
 func (c *Client) SubmitOrder(order *order.Order) error {
 	// TODO: implementation
 	return nil
+}
+
+func (c *Client) AccountBalance(
+	ctx context.Context,
+	asset string,
+) (*big.Float, error) {
+	account, err := c.delegate.NewGetAccountService().Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, balance := range account.Balances {
+		if balance.Asset == asset {
+			amount, ok := new(big.Float).SetString(balance.Free)
+			if !ok {
+				return nil, fmt.Errorf(
+					"could not parse balance for asset [%v]",
+					balance.Asset,
+				)
+			}
+
+			return amount, nil
+		}
+	}
+
+	return big.NewFloat(0), nil
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {

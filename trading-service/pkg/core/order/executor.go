@@ -52,6 +52,8 @@ func (e *Executor) loop(ctx context.Context) {
 				continue
 			}
 
+			// TODO: probably the order should be persisted at this stage
+
 			e.logger.Infof(
 				"executing new order [%v]",
 				order,

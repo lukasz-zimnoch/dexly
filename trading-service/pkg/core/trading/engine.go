@@ -2,6 +2,7 @@ package trading
 
 import (
 	"context"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/account"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
@@ -14,7 +15,16 @@ const (
 	traderInterval = "1m"
 )
 
+type Pair struct {
+	Base, Quote string
+}
+
+func (p Pair) String() string {
+	return p.Base + p.Quote
+}
+
 type Exchange interface {
+	account.Provider
 	candle.Provider
 	order.Submitter
 
@@ -25,17 +35,17 @@ type Engine struct {
 	exchange Exchange
 
 	tradersMutex sync.Mutex
-	traders      map[string]bool
+	traders      map[Pair]bool
 }
 
 func NewEngine(exchange Exchange) *Engine {
 	return &Engine{
 		exchange: exchange,
-		traders:  make(map[string]bool),
+		traders:  make(map[Pair]bool),
 	}
 }
 
-func (e *Engine) ActivateTrader(ctx context.Context, pair string) {
+func (e *Engine) ActivateTrader(ctx context.Context, pair Pair) {
 	e.tradersMutex.Lock()
 	defer e.tradersMutex.Unlock()
 
@@ -72,7 +82,7 @@ func (e *Engine) ActivateTrader(ctx context.Context, pair string) {
 	}()
 }
 
-func (e *Engine) newContextLogger(pair string) logger.Logger {
+func (e *Engine) newContextLogger(pair Pair) logger.Logger {
 	return logger.WithFields(
 		map[string]interface{}{
 			"exchange": e.exchange.Name(),
@@ -92,7 +102,7 @@ func (e *Engine) ActiveTraders() int {
 func (e *Engine) runTraderInstance(
 	ctx context.Context,
 	logger logger.Logger,
-	pair string,
+	pair Pair,
 ) {
 	logger.Infof("running trader instance")
 	defer logger.Infof("terminating trader instance")
@@ -100,10 +110,14 @@ func (e *Engine) runTraderInstance(
 	traderCtx, cancelTraderCtx := context.WithCancel(ctx)
 	defer cancelTraderCtx()
 
+	logger.Infof("creating account manager")
+
+	accountManager := account.NewManager(e.exchange, pair.Quote)
+
 	now := time.Now()
 
 	filter := &candle.Filter{
-		Pair:      pair,
+		Pair:      pair.String(),
 		Interval:  traderInterval,
 		StartTime: now.Add(-12 * time.Hour), // TODO: extend to 24h
 		EndTime:   now,
@@ -130,7 +144,11 @@ func (e *Engine) runTraderInstance(
 
 	logger.Infof("creating order generator")
 
-	orderGenerator := order.NewGenerator(candleRegistry)
+	orderGenerator := order.NewGenerator(
+		logger,
+		candleRegistry,
+		accountManager,
+	)
 
 	logger.Infof("creating order registry")
 
