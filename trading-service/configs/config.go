@@ -6,7 +6,15 @@ import (
 )
 
 type Config struct {
-	Binance Binance `yaml:"binance"`
+	Database Database `yaml:"database"`
+	Binance  Binance  `yaml:"binance"`
+}
+
+type Database struct {
+	Address  string `yaml:"address"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Name     string `yaml:"name"`
 }
 
 type Binance struct {

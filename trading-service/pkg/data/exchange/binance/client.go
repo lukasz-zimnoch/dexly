@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/adshao/go-binance"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
-	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/order"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trade"
 	"math/big"
 	"time"
 )
@@ -109,9 +109,14 @@ func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *candle.Tick {
 	}
 }
 
-func (c *Client) SubmitOrder(order *order.Order) error {
+func (c *Client) ExecuteOrder(order *trade.Order) error {
 	// TODO: implementation
 	return nil
+}
+
+func (c *Client) IsOrderExecuted(order *trade.Order) (bool, error) {
+	// TODO: implementation
+	return false, nil
 }
 
 func (c *Client) AccountBalance(

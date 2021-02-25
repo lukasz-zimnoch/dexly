@@ -51,7 +51,7 @@ type Filter struct {
 	EndTime   time.Time
 }
 
-type Provider interface {
+type Supplier interface {
 	Candles(
 		ctx context.Context,
 		filter *Filter,
@@ -65,7 +65,7 @@ type Provider interface {
 
 type Monitor struct {
 	logger   logger.Logger
-	provider Provider
+	supplier Supplier
 	filter   *Filter
 	registry *Registry
 	errChan  chan error
@@ -74,13 +74,13 @@ type Monitor struct {
 func RunMonitor(
 	ctx context.Context,
 	logger logger.Logger,
-	provider Provider,
+	supplier Supplier,
 	filter *Filter,
 	registry *Registry,
 ) *Monitor {
 	monitor := &Monitor{
 		logger:   logger,
-		provider: provider,
+		supplier: supplier,
 		filter:   filter,
 		registry: registry,
 		errChan:  make(chan error, 1),
@@ -92,7 +92,7 @@ func RunMonitor(
 }
 
 func (m *Monitor) loop(ctx context.Context) {
-	candles, err := m.provider.Candles(ctx, m.filter)
+	candles, err := m.supplier.Candles(ctx, m.filter)
 	if err != nil {
 		m.errChan <- fmt.Errorf("failed to get candles: [%v]", err)
 		return
@@ -103,7 +103,7 @@ func (m *Monitor) loop(ctx context.Context) {
 	m.registry.AddCandles(candles...)
 
 	tickTimeoutTimer := time.NewTimer(tickTimeout)
-	ticker, tickerErrorChannel := m.provider.CandlesTicker(ctx, m.filter)
+	ticker, tickerErrorChannel := m.supplier.CandlesTicker(ctx, m.filter)
 
 	for {
 		select {

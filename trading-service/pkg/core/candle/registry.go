@@ -1,6 +1,7 @@
 package candle
 
 import (
+	"math/big"
 	"sync"
 )
 
@@ -57,4 +58,17 @@ func (r *Registry) Candles() []*Candle {
 	copy(snapshot, r.candles)
 
 	return snapshot
+}
+
+func (r *Registry) Price() (*big.Float, error) {
+	r.candlesMutex.RLock()
+	defer r.candlesMutex.RUnlock()
+
+	price := new(big.Float)
+	err := price.UnmarshalText([]byte(r.candles[len(r.candles)-1].ClosePrice))
+	if err != nil {
+		return nil, err
+	}
+
+	return price, nil
 }

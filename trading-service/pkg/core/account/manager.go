@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type Provider interface {
+type Supplier interface {
 	AccountBalance(
 		ctx context.Context,
 		asset string,
@@ -14,14 +14,16 @@ type Provider interface {
 }
 
 type Manager struct {
-	provider Provider
-	asset    string
+	supplier   Supplier
+	asset      string
+	riskFactor *big.Float
 }
 
-func NewManager(provider Provider, asset string) *Manager {
+func NewManager(supplier Supplier, asset string) *Manager {
 	return &Manager{
-		provider: provider,
-		asset:    asset,
+		supplier:   supplier,
+		asset:      asset,
+		riskFactor: big.NewFloat(0.02),
 	}
 }
 
@@ -29,5 +31,9 @@ func (m *Manager) Balance() (*big.Float, error) {
 	ctx, cancelCtx := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelCtx()
 
-	return m.provider.AccountBalance(ctx, m.asset)
+	return m.supplier.AccountBalance(ctx, m.asset)
+}
+
+func (m *Manager) RiskFactor() *big.Float {
+	return m.riskFactor
 }
