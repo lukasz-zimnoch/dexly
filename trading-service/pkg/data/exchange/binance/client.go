@@ -21,7 +21,7 @@ func NewClient(apiKey, secretKey string) *Client {
 }
 
 func (c *Client) Name() string {
-	return "binance"
+	return "BINANCE"
 }
 
 func (c *Client) Candles(

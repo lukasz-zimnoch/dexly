@@ -41,21 +41,71 @@ func (pr *PgRepository) GetOrders(
 	exchange string,
 	executed bool,
 ) ([]*trade.Order, error) {
-	// TODO: implementation
-	query := ""
-	pgOrders := make([]pgOrder, 0)
+	var selectResult []struct {
+		pgPosition `db:"position"`
+		pgOrder    `db:"order"`
+	}
 
-	err := pr.client.Select(pgOrders, query, pair, exchange, executed)
+	query :=
+		`SELECT 
+    		o.id "order.id", 
+       		o.position_id "order.position_id", 
+       		o.side "order.side", 
+       		o.price "order.price", 
+       		o.size "order.size",
+       		o.time "order.time",
+       		o.executed "order.executed",
+       		p.id "position.id",
+       		p.type "position.type",
+       		p.entry_price "position.entry_price",
+       		p.size "position.size",
+       		p.take_profit_price "position.take_profit_price",
+       		p.stop_loss_price "position.stop_loss_price",
+       		p.pair "position.pair",
+       		p.exchange "position.exchange",
+       		p.time "position.time" 
+		FROM position_order o 
+		JOIN position p ON p.id = o.position_id 
+		WHERE p.pair = $1 AND p.exchange = $2 AND o.executed = $3
+		ORDER BY o.time ASC`
+
+	err := pr.client.Select(&selectResult, query, pair, exchange, executed)
 	if err != nil {
 		return nil, err
 	}
 
-	orders := make([]*trade.Order, len(pgOrders))
-	for i, pgOrder := range pgOrders {
-		orders[i] = fromPgOrder(&pgOrder)
+	orders := make([]*trade.Order, len(selectResult))
+	for i, result := range selectResult {
+		orders[i] = fromPgOrder(&result.pgOrder, &result.pgPosition)
 	}
 
 	return orders, nil
+}
+
+type pgPosition struct {
+	ID              uuid.UUID
+	Type            int
+	EntryPrice      pgtype.Float8 `db:"entry_price"`
+	Size            pgtype.Float8
+	TakeProfitPrice pgtype.Float8 `db:"take_profit_price"`
+	StopLossPrice   pgtype.Float8 `db:"stop_loss_price"`
+	Pair            string
+	Exchange        string
+	Time            time.Time
+}
+
+func fromPgPosition(pgPosition *pgPosition) *trade.Position {
+	return &trade.Position{
+		ID:              pgPosition.ID,
+		Type:            trade.PositionType(pgPosition.Type),
+		EntryPrice:      fromPgFloat(pgPosition.EntryPrice),
+		Size:            fromPgFloat(pgPosition.Size),
+		TakeProfitPrice: fromPgFloat(pgPosition.TakeProfitPrice),
+		StopLossPrice:   fromPgFloat(pgPosition.StopLossPrice),
+		Pair:            pgPosition.Pair,
+		Exchange:        pgPosition.Exchange,
+		Time:            pgPosition.Time,
+	}
 }
 
 type pgOrder struct {
@@ -80,10 +130,10 @@ func toPgOrder(order *trade.Order) *pgOrder {
 	}
 }
 
-func fromPgOrder(pgOrder *pgOrder) *trade.Order {
+func fromPgOrder(pgOrder *pgOrder, pgPosition *pgPosition) *trade.Order {
 	return &trade.Order{
 		ID:       pgOrder.ID,
-		Position: nil, // TODO: fetch position
+		Position: fromPgPosition(pgPosition),
 		Side:     trade.OrderSide(pgOrder.Side),
 		Price:    fromPgFloat(pgOrder.Price),
 		Size:     fromPgFloat(pgOrder.Size),
