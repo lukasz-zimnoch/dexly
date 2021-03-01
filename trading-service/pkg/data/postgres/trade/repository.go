@@ -18,22 +18,48 @@ func NewPgRepository(client *postgres.Client) *PgRepository {
 }
 
 func (pr *PgRepository) CreatePosition(position *trade.Position) error {
-	// TODO: implementation
-	return nil
+	query := `INSERT INTO 
+    	position (id, type, entry_price, size, take_profit_price, 
+    	          stop_loss_price, pair, exchange, time) 
+    	VALUES (:id, :type, :entry_price, :size, :take_profit_price, 
+    	        :stop_loss_price, :pair, :exchange, :time)`
+
+	pgPosition, err := toPgPosition(position)
+	if err != nil {
+		return err
+	}
+
+	_, err = pr.client.NamedExec(query, pgPosition)
+
+	return err
 }
 
 func (pr *PgRepository) CreateOrder(order *trade.Order) error {
-	// TODO: implementation
-	query := ""
+	query := `INSERT INTO 
+    	position_order (id, position_id, side, price, size, time, executed) 
+    	VALUES (:id, :position_id, :side, :price, :size, :time, :executed)`
 
-	_, err := pr.client.NamedExec(query, toPgOrder(order))
+	pgOrder, err := toPgOrder(order)
+	if err != nil {
+		return err
+	}
+
+	_, err = pr.client.NamedExec(query, pgOrder)
 
 	return err
 }
 
 func (pr *PgRepository) UpdateOrder(order *trade.Order) error {
-	// TODO: implementation
-	return nil
+	query := `UPDATE position_order SET executed = :executed WHERE id = :id`
+
+	pgOrder, err := toPgOrder(order)
+	if err != nil {
+		return err
+	}
+
+	_, err = pr.client.NamedExec(query, pgOrder)
+
+	return err
 }
 
 func (pr *PgRepository) GetOrders(
@@ -76,7 +102,12 @@ func (pr *PgRepository) GetOrders(
 
 	orders := make([]*trade.Order, len(selectResult))
 	for i, result := range selectResult {
-		orders[i] = fromPgOrder(&result.pgOrder, &result.pgPosition)
+		order, err := fromPgOrder(&result.pgOrder, &result.pgPosition)
+		if err != nil {
+			return nil, err
+		}
+
+		orders[i] = order
 	}
 
 	return orders, nil
@@ -85,76 +116,162 @@ func (pr *PgRepository) GetOrders(
 type pgPosition struct {
 	ID              uuid.UUID
 	Type            int
-	EntryPrice      pgtype.Float8 `db:"entry_price"`
-	Size            pgtype.Float8
-	TakeProfitPrice pgtype.Float8 `db:"take_profit_price"`
-	StopLossPrice   pgtype.Float8 `db:"stop_loss_price"`
+	EntryPrice      pgtype.Numeric `db:"entry_price"`
+	Size            pgtype.Numeric
+	TakeProfitPrice pgtype.Numeric `db:"take_profit_price"`
+	StopLossPrice   pgtype.Numeric `db:"stop_loss_price"`
 	Pair            string
 	Exchange        string
 	Time            time.Time
 }
 
-func fromPgPosition(pgPosition *pgPosition) *trade.Position {
+func toPgPosition(position *trade.Position) (*pgPosition, error) {
+	entryPrice, err := toPgNumeric(position.EntryPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := toPgNumeric(position.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	takeProfitPrice, err := toPgNumeric(position.TakeProfitPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	stopLossPrice, err := toPgNumeric(position.StopLossPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pgPosition{
+		ID:              position.ID,
+		Type:            int(position.Type),
+		EntryPrice:      entryPrice,
+		Size:            size,
+		TakeProfitPrice: takeProfitPrice,
+		StopLossPrice:   stopLossPrice,
+		Pair:            position.Pair,
+		Exchange:        position.Exchange,
+		Time:            position.Time,
+	}, nil
+}
+
+func fromPgPosition(pgPosition *pgPosition) (*trade.Position, error) {
+	entryPrice, err := fromPgNumeric(pgPosition.EntryPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := fromPgNumeric(pgPosition.Size)
+	if err != nil {
+		return nil, err
+	}
+
+	takeProfitPrice, err := fromPgNumeric(pgPosition.TakeProfitPrice)
+	if err != nil {
+		return nil, err
+	}
+
+	stopLossPrice, err := fromPgNumeric(pgPosition.StopLossPrice)
+	if err != nil {
+		return nil, err
+	}
+
 	return &trade.Position{
 		ID:              pgPosition.ID,
 		Type:            trade.PositionType(pgPosition.Type),
-		EntryPrice:      fromPgFloat(pgPosition.EntryPrice),
-		Size:            fromPgFloat(pgPosition.Size),
-		TakeProfitPrice: fromPgFloat(pgPosition.TakeProfitPrice),
-		StopLossPrice:   fromPgFloat(pgPosition.StopLossPrice),
+		EntryPrice:      entryPrice,
+		Size:            size,
+		TakeProfitPrice: takeProfitPrice,
+		StopLossPrice:   stopLossPrice,
 		Pair:            pgPosition.Pair,
 		Exchange:        pgPosition.Exchange,
 		Time:            pgPosition.Time,
-	}
+	}, nil
 }
 
 type pgOrder struct {
 	ID         uuid.UUID
 	PositionID uuid.UUID `db:"position_id"`
 	Side       int
-	Price      pgtype.Float8
-	Size       pgtype.Float8
+	Price      pgtype.Numeric
+	Size       pgtype.Numeric
 	Time       time.Time
 	Executed   bool
 }
 
-func toPgOrder(order *trade.Order) *pgOrder {
+func toPgOrder(order *trade.Order) (*pgOrder, error) {
+	price, err := toPgNumeric(order.Price)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := toPgNumeric(order.Size)
+	if err != nil {
+		return nil, err
+	}
+
 	return &pgOrder{
 		ID:         order.ID,
 		PositionID: order.Position.ID,
 		Side:       int(order.Side),
-		Price:      toPgFloat(order.Price),
-		Size:       toPgFloat(order.Size),
+		Price:      price,
+		Size:       size,
 		Time:       order.Time,
 		Executed:   order.Executed,
-	}
+	}, nil
 }
 
-func fromPgOrder(pgOrder *pgOrder, pgPosition *pgPosition) *trade.Order {
+func fromPgOrder(
+	pgOrder *pgOrder,
+	pgPosition *pgPosition,
+) (*trade.Order, error) {
+	position, err := fromPgPosition(pgPosition)
+	if err != nil {
+		return nil, err
+	}
+
+	price, err := fromPgNumeric(pgOrder.Price)
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := fromPgNumeric(pgOrder.Size)
+	if err != nil {
+		return nil, err
+	}
+
 	return &trade.Order{
 		ID:       pgOrder.ID,
-		Position: fromPgPosition(pgPosition),
+		Position: position,
 		Side:     trade.OrderSide(pgOrder.Side),
-		Price:    fromPgFloat(pgOrder.Price),
-		Size:     fromPgFloat(pgOrder.Size),
+		Price:    price,
+		Size:     size,
 		Time:     pgOrder.Time,
 		Executed: pgOrder.Executed,
-	}
+	}, nil
 }
 
-func toPgFloat(value *big.Float) pgtype.Float8 {
+func toPgNumeric(value *big.Float) (pgtype.Numeric, error) {
+	var result pgtype.Numeric
 	valueFloat, _ := value.Float64()
 
-	return pgtype.Float8{
-		Float:  valueFloat,
-		Status: pgtype.Present,
+	if err := result.Set(valueFloat); err != nil {
+		return pgtype.Numeric{}, err
 	}
+
+	return result, nil
 }
 
-func fromPgFloat(value pgtype.Float8) *big.Float {
-	if valueFloat, ok := value.Get().(float64); ok {
-		return big.NewFloat(valueFloat)
+func fromPgNumeric(value pgtype.Numeric) (*big.Float, error) {
+	var result float64
+
+	if err := value.AssignTo(&result); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return big.NewFloat(result), nil
 }
