@@ -17,7 +17,7 @@ type EmaCross struct {
 	candleSupplier candleSupplier
 }
 
-func NewStrategy(candleSupplier candleSupplier) *EmaCross {
+func NewEmaCross(candleSupplier candleSupplier) *EmaCross {
 	return &EmaCross{
 		candleSupplier: candleSupplier,
 	}

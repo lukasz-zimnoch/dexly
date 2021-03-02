@@ -146,13 +146,16 @@ func (e *Engine) runWorker(
 	pipeline := runPipeline(
 		workerCtx,
 		logger,
-		strategy.NewStrategy(
+		strategy.NewEmaCross(
 			candleRegistry,
 		),
 		trade.NewManager(
+			logger,
 			candleRegistry,
 			account.NewManager(e.exchange, pair.Quote),
 			e.tradeRepository,
+			pair.String(),
+			e.exchange.Name(),
 		),
 		e.exchange,
 	)
