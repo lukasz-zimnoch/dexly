@@ -1,9 +1,14 @@
 package trade
 
 import (
+	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"math/big"
+	"sort"
+	"time"
 )
+
+const orderValidityTime = 1 * time.Minute
 
 type priceSupplier interface {
 	Price() (*big.Float, error)
@@ -15,23 +20,35 @@ type accountSupplier interface {
 	RiskFactor() *big.Float
 }
 
+type PositionFilter struct {
+	Pair     string
+	Exchange string
+	Status   PositionStatus
+}
+
 type Repository interface {
 	CreatePosition(position *Position) error
+
+	UpdatePosition(position *Position) error
+
+	GetPositions(filter PositionFilter) ([]*Position, error)
+
+	CountPositions(filter PositionFilter) (int, error)
 
 	CreateOrder(order *Order) error
 
 	UpdateOrder(order *Order) error
-
-	GetOrders(pair string, exchange string, executed bool) ([]*Order, error)
 }
 
+// TODO: think about mutexes to protect against concurrent access
 type Manager struct {
-	logger          logger.Logger
-	priceSupplier   priceSupplier
-	accountSupplier accountSupplier
-	repository      Repository
-	pair            string
-	exchange        string
+	logger             logger.Logger
+	priceSupplier      priceSupplier
+	accountSupplier    accountSupplier
+	repository         Repository
+	pair               string
+	exchange           string
+	openPositionsLimit int
 }
 
 func NewManager(
@@ -43,23 +60,45 @@ func NewManager(
 	exchange string,
 ) *Manager {
 	return &Manager{
-		logger:          logger,
-		priceSupplier:   priceSupplier,
-		accountSupplier: accountSupplier,
-		repository:      repository,
-		pair:            pair,
-		exchange:        exchange,
+		logger:             logger,
+		priceSupplier:      priceSupplier,
+		accountSupplier:    accountSupplier,
+		repository:         repository,
+		pair:               pair,
+		exchange:           exchange,
+		openPositionsLimit: 1,
 	}
 }
 
 func (m *Manager) NotifySignal(signal *Signal) {
+	m.logger.Infof("received signal [%+v]", signal)
+
 	// TODO: support SHORT signals as well
 	if signal.Type != LONG {
 		m.logger.Warningf("only LONG signals are currently supported")
 		return
 	}
 
-	// TODO: check if active positions limit is not exceeded
+	openPositionsCount, err := m.repository.CountPositions(
+		PositionFilter{
+			Pair:     m.pair,
+			Exchange: m.exchange,
+			Status:   OPEN,
+		},
+	)
+	if err != nil {
+		m.logger.Errorf("could not count open positions: [%v]", err)
+		return
+	}
+
+	if openPositionsCount >= m.openPositionsLimit {
+		m.logger.Infof(
+			"dropping signal [%+v] due to "+
+				"open position limit restrictions",
+			signal,
+		)
+		return
+	}
 
 	positionSize, err := m.calculatePositionSize(signal)
 	if err != nil {
@@ -67,38 +106,31 @@ func (m *Manager) NotifySignal(signal *Signal) {
 		return
 	}
 
-	position := NewPosition(
-		signal.Type,
-		signal.EntryTarget,
-		positionSize,
-		signal.TakeProfitTarget,
-		signal.StopLossTarget,
-		m.pair,
-		m.exchange,
+	position, err := m.openPosition(signal, positionSize)
+	if err != nil {
+		m.logger.Errorf("could not open position: [%v]", err)
+		return
+	}
+
+	_, err = m.createEntryOrder(position)
+	if err != nil {
+		m.logger.Errorf(
+			"could not create entry order for position [%v]: [%v]",
+			position.ID,
+			err,
+		)
+		return
+	}
+
+	m.logger.Infof(
+		"position [%v] based on signal [%+v] "+
+			"has been opened successfully",
+		position.ID,
+		signal,
 	)
-
-	if err = m.repository.CreatePosition(position); err != nil {
-		m.logger.Errorf(
-			"could not persist position [%v]: [%v]",
-			position.ID,
-			err,
-		)
-		return
-	}
-
-	order := NewOrder(position, BUY, position.EntryPrice, position.Size)
-
-	if err = m.repository.CreateOrder(order); err != nil {
-		m.logger.Errorf(
-			"could not persist order [%v] for position [%v]: [%v]",
-			order.ID,
-			position.ID,
-			err,
-		)
-		return
-	}
 }
 
+// TODO: include exchange commission
 func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
 	accountBalance, err := m.accountSupplier.Balance()
 	if err != nil {
@@ -122,11 +154,82 @@ func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
 	return positionSize, nil
 }
 
-func (m *Manager) NotifyExecution(order *Order) {
-	if order.Executed {
-		m.logger.Warningf("order [%v] has been already executed", order.ID)
-		return
+func (m *Manager) openPosition(
+	signal *Signal,
+	positionSize *big.Float,
+) (*Position, error) {
+	position := NewPosition(
+		signal.Type,
+		signal.EntryTarget,
+		positionSize,
+		signal.TakeProfitTarget,
+		signal.StopLossTarget,
+		m.pair,
+		m.exchange,
+	)
+
+	err := m.repository.CreatePosition(position)
+	if err != nil {
+		return nil, err
 	}
+
+	return position, nil
+}
+
+func (m *Manager) closePosition(position *Position) error {
+	position.Status = CLOSED
+
+	err := m.repository.UpdatePosition(position)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) createEntryOrder(
+	position *Position,
+) (*Order, error) {
+	order := NewOrder(
+		position.ID,
+		position.Type.EntryOrderSide(),
+		position.EntryPrice,
+		position.Size,
+	)
+
+	err := m.repository.CreateOrder(order)
+	if err != nil {
+		return nil, err
+	}
+
+	return order, nil
+}
+
+func (m *Manager) createExitOrder(
+	position *Position,
+	price *big.Float,
+) (*Order, error) {
+	order := NewOrder(
+		position.ID,
+		position.Type.ExitOrderSide(),
+		price,
+		position.Size,
+	)
+
+	err := m.repository.CreateOrder(order)
+	if err != nil {
+		return nil, err
+	}
+
+	return order, nil
+}
+
+// TODO: check the actually executed price and size
+func (m *Manager) NotifyExecution(order *Order) {
+	m.logger.Infof(
+		"received notification about order [%v] execution",
+		order.ID,
+	)
 
 	order.Executed = true
 
@@ -138,20 +241,193 @@ func (m *Manager) NotifyExecution(order *Order) {
 		)
 		return
 	}
+
+	m.logger.Infof(
+		"execution of order [%v] has been noted successfully",
+		order.ID,
+	)
 }
 
-// TODO: consider renaming as method will have side effects
-func (m *Manager) OrderQueue() []*Order {
-	// TODO: take positions without any orders and create orders for them
-
-	// TODO: get last price, compare with active positions TP and SL levels
-	//  and create appropriate close orders
-
-	orders, err := m.repository.GetOrders(m.pair, m.exchange, false)
+func (m *Manager) RefreshOrdersQueue() []*Order {
+	openPositions, err := m.repository.GetPositions(
+		PositionFilter{
+			Pair:     m.pair,
+			Exchange: m.exchange,
+			Status:   OPEN,
+		},
+	)
 	if err != nil {
-		m.logger.Errorf("could not get pending orders: [%v]", err)
+		m.logger.Errorf("could not get open positions: [%v]", err)
 		return nil
 	}
 
-	return orders
+	sort.SliceStable(openPositions, func(i, j int) bool {
+		return openPositions[i].Time.Before(openPositions[j].Time)
+	})
+
+	currentPrice, err := m.priceSupplier.Price()
+	if err != nil {
+		m.logger.Errorf("could not determine current price: [%v]", err)
+		return nil
+	}
+
+	pendingOrders := make([]*Order, 0)
+
+	for _, position := range openPositions {
+		if err := assertPositionOrdersState(position); err != nil {
+			m.logger.Errorf(
+				"orders state assertion is false "+
+					"for position [%v]: [%v]",
+				position.ID,
+				err,
+			)
+			continue
+		}
+
+		entryOrder, exists := findEntryOrder(position)
+		if !exists {
+			// just close without trying to recover the entry order
+			if err := m.closePosition(position); err != nil {
+				m.logger.Errorf(
+					"could not close position [%v]: [%v]",
+					position.ID,
+					err,
+				)
+			}
+			continue
+		}
+
+		if !entryOrder.Executed {
+			if time.Now().Sub(entryOrder.Time) > orderValidityTime {
+				if err := m.closePosition(position); err != nil {
+					m.logger.Errorf(
+						"could not close position [%v]: [%v]",
+						position.ID,
+						err,
+					)
+				}
+				continue
+			}
+
+			pendingOrders = append(pendingOrders, entryOrder)
+			continue
+		}
+
+		exitOrder, exists := findExitOrder(position)
+		if !exists {
+			shouldExit := currentPrice.Cmp(position.StopLossPrice) <= 0 ||
+				currentPrice.Cmp(position.TakeProfitPrice) >= 0
+
+			if shouldExit {
+				exitOrder, err := m.createExitOrder(position, currentPrice)
+				if err != nil {
+					m.logger.Errorf(
+						"could not create exit order "+
+							"for position [%v]: [%v]",
+						position.ID,
+						err,
+					)
+					continue
+				}
+
+				pendingOrders = append(pendingOrders, exitOrder)
+				continue
+			}
+
+			continue
+		}
+
+		if !exitOrder.Executed {
+			pendingOrders = append(pendingOrders, exitOrder)
+			continue
+		}
+
+		if err := m.closePosition(position); err != nil {
+			m.logger.Errorf(
+				"could not close position [%v]: [%v]",
+				position.ID,
+				err,
+			)
+		}
+	}
+
+	return pendingOrders
+}
+
+func assertPositionOrdersState(position *Position) error {
+	ordersCount := len(position.Orders)
+
+	if ordersCount == 0 {
+		return nil
+	} else if ordersCount == 1 {
+		entryOrderSideAssertion := position.Orders[0].Side ==
+			position.Type.EntryOrderSide()
+
+		if !entryOrderSideAssertion {
+			return fmt.Errorf(
+				"position has one order and " +
+					"entry order side assertion is false",
+			)
+		}
+	} else if ordersCount == 2 {
+		sort.SliceStable(position.Orders, func(i, j int) bool {
+			return position.Orders[i].Time.Before(position.Orders[j].Time)
+		})
+
+		entryOrderSideAssertion := position.Orders[0].Side ==
+			position.Type.EntryOrderSide()
+
+		if !entryOrderSideAssertion {
+			return fmt.Errorf(
+				"position has two orders and " +
+					"entry order side assertion is false",
+			)
+		}
+
+		entryOrderExecutedAssertion := position.Orders[0].Executed
+
+		if !entryOrderExecutedAssertion {
+			return fmt.Errorf(
+				"position has two orders and " +
+					"entry order executed assertion is false",
+			)
+		}
+
+		exitOrderSideAssertion := position.Orders[1].Side ==
+			position.Type.ExitOrderSide()
+
+		if !exitOrderSideAssertion {
+			return fmt.Errorf(
+				"position has two orders and " +
+					"exit order side assertion is false",
+			)
+		}
+	} else {
+		return fmt.Errorf(
+			"proper orders count assertion is false: [%v]",
+			ordersCount,
+		)
+	}
+
+	return nil
+}
+
+func findEntryOrder(position *Position) (*Order, bool) {
+	for _, order := range position.Orders {
+		if order.Side == position.Type.EntryOrderSide() {
+			return order, true
+		}
+	}
+
+	return nil, false
+}
+
+func findExitOrder(position *Position) (*Order, bool) {
+	for _, order := range position.Orders {
+		if order.Side == position.Type.ExitOrderSide() {
+			return order, true
+		}
+	}
+
+	return nil, false
 }

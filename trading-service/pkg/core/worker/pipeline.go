@@ -58,7 +58,7 @@ func (p *pipeline) loop(ctx context.Context) {
 				p.manager.NotifySignal(signal)
 			}
 
-			for _, order := range p.manager.OrderQueue() {
+			for _, order := range p.manager.RefreshOrdersQueue() {
 				alreadyExecuted, err := p.executor.IsOrderExecuted(order)
 				if err != nil {
 					p.errChan <- fmt.Errorf(
