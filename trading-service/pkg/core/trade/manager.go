@@ -274,18 +274,17 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 	pendingOrders := make([]*Order, 0)
 
 	for _, position := range openPositions {
-		if err := assertPositionOrdersState(position); err != nil {
+		entryOrder, exitOrder, err := ordersBreakdown(position)
+		if err != nil {
 			m.logger.Errorf(
-				"orders state assertion is false "+
-					"for position [%v]: [%v]",
+				"inconsistent orders state for position [%v]: [%v]",
 				position.ID,
 				err,
 			)
 			continue
 		}
 
-		entryOrder, exists := findEntryOrder(position)
-		if !exists {
+		if entryOrder == nil {
 			// just close without trying to recover the entry order
 			if err := m.closePosition(position); err != nil {
 				m.logger.Errorf(
@@ -313,8 +312,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 			continue
 		}
 
-		exitOrder, exists := findExitOrder(position)
-		if !exists {
+		if exitOrder == nil {
 			shouldExit := currentPrice.Cmp(position.StopLossPrice) <= 0 ||
 				currentPrice.Cmp(position.TakeProfitPrice) >= 0
 
@@ -333,7 +331,6 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 				pendingOrders = append(pendingOrders, exitOrder)
 				continue
 			}
-
 			continue
 		}
 
@@ -354,80 +351,43 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 	return pendingOrders
 }
 
-func assertPositionOrdersState(position *Position) error {
+func ordersBreakdown(position *Position) (*Order, *Order, error) {
 	ordersCount := len(position.Orders)
 
 	if ordersCount == 0 {
-		return nil
+		return nil, nil, nil
 	} else if ordersCount == 1 {
-		entryOrderSideAssertion := position.Orders[0].Side ==
-			position.Type.EntryOrderSide()
+		entryOrder := position.Orders[0]
 
-		if !entryOrderSideAssertion {
-			return fmt.Errorf(
-				"position has one order and " +
-					"entry order side assertion is false",
-			)
+		if entryOrder.Side != position.Type.EntryOrderSide() {
+			return nil, nil, fmt.Errorf("entry order has wrong side")
 		}
+
+		return entryOrder, nil, nil
 	} else if ordersCount == 2 {
 		sort.SliceStable(position.Orders, func(i, j int) bool {
 			return position.Orders[i].Time.Before(position.Orders[j].Time)
 		})
 
-		entryOrderSideAssertion := position.Orders[0].Side ==
-			position.Type.EntryOrderSide()
+		entryOrder := position.Orders[0]
+		exitOrder := position.Orders[1]
 
-		if !entryOrderSideAssertion {
-			return fmt.Errorf(
-				"position has two orders and " +
-					"entry order side assertion is false",
+		if entryOrder.Side != position.Type.EntryOrderSide() {
+			return nil, nil, fmt.Errorf("entry order has wrong side")
+		}
+
+		if !entryOrder.Executed {
+			return nil, nil, fmt.Errorf(
+				"exit order exists despite entry order is not executed yet",
 			)
 		}
 
-		entryOrderExecutedAssertion := position.Orders[0].Executed
-
-		if !entryOrderExecutedAssertion {
-			return fmt.Errorf(
-				"position has two orders and " +
-					"entry order executed assertion is false",
-			)
+		if exitOrder.Side != position.Type.ExitOrderSide() {
+			return nil, nil, fmt.Errorf("exit order has wrong side")
 		}
 
-		exitOrderSideAssertion := position.Orders[1].Side ==
-			position.Type.ExitOrderSide()
-
-		if !exitOrderSideAssertion {
-			return fmt.Errorf(
-				"position has two orders and " +
-					"exit order side assertion is false",
-			)
-		}
+		return entryOrder, exitOrder, nil
 	} else {
-		return fmt.Errorf(
-			"proper orders count assertion is false: [%v]",
-			ordersCount,
-		)
+		return nil, nil, fmt.Errorf("wrong orders count: [%v]", ordersCount)
 	}
-
-	return nil
-}
-
-func findEntryOrder(position *Position) (*Order, bool) {
-	for _, order := range position.Orders {
-		if order.Side == position.Type.EntryOrderSide() {
-			return order, true
-		}
-	}
-
-	return nil, false
-}
-
-func findExitOrder(position *Position) (*Order, bool) {
-	for _, order := range position.Orders {
-		if order.Side == position.Type.ExitOrderSide() {
-			return order, true
-		}
-	}
-
-	return nil, false
 }
