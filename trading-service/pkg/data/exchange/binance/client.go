@@ -145,6 +145,13 @@ func (c *Client) AccountBalance(
 	return big.NewFloat(0), nil
 }
 
+func (c *Client) AccountTakerCommission(
+	ctx context.Context,
+) (*big.Float, error) {
+	// TODO: get from exchange
+	return big.NewFloat(0.001), nil
+}
+
 func parseMilliseconds(milliseconds int64) time.Time {
 	return time.Unix(0, milliseconds*int64(time.Millisecond))
 }

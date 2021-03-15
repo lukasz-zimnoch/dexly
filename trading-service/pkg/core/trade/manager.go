@@ -18,6 +18,8 @@ type accountSupplier interface {
 	Balance() (*big.Float, error)
 
 	RiskFactor() *big.Float
+
+	TakerCommission() (*big.Float, error)
 }
 
 type PositionFilter struct {
@@ -40,7 +42,6 @@ type Repository interface {
 	UpdateOrder(order *Order) error
 }
 
-// TODO: think about mutexes to protect against concurrent access
 type Manager struct {
 	logger             logger.Logger
 	priceSupplier      priceSupplier
@@ -130,7 +131,6 @@ func (m *Manager) NotifySignal(signal *Signal) {
 	)
 }
 
-// TODO: include exchange commission
 func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
 	accountBalance, err := m.accountSupplier.Balance()
 	if err != nil {
@@ -158,17 +158,32 @@ func (m *Manager) openPosition(
 	signal *Signal,
 	positionSize *big.Float,
 ) (*Position, error) {
+	accountCommission, err := m.accountSupplier.TakerCommission()
+	if err != nil {
+		return nil, err
+	}
+
+	takeProfitPrice := new(big.Float).Mul(
+		signal.TakeProfitTarget,
+		new(big.Float).Add(big.NewFloat(1), accountCommission),
+	)
+
+	stopLossPrice := new(big.Float).Mul(
+		signal.StopLossTarget,
+		new(big.Float).Sub(big.NewFloat(1), accountCommission),
+	)
+
 	position := NewPosition(
 		signal.Type,
 		signal.EntryTarget,
 		positionSize,
-		signal.TakeProfitTarget,
-		signal.StopLossTarget,
+		takeProfitPrice,
+		stopLossPrice,
 		m.pair,
 		m.exchange,
 	)
 
-	err := m.repository.CreatePosition(position)
+	err = m.repository.CreatePosition(position)
 	if err != nil {
 		return nil, err
 	}

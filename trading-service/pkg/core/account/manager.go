@@ -7,10 +7,9 @@ import (
 )
 
 type Supplier interface {
-	AccountBalance(
-		ctx context.Context,
-		asset string,
-	) (*big.Float, error)
+	AccountBalance(ctx context.Context, asset string) (*big.Float, error)
+
+	AccountTakerCommission(ctx context.Context) (*big.Float, error)
 }
 
 type Manager struct {
@@ -36,4 +35,11 @@ func (m *Manager) Balance() (*big.Float, error) {
 
 func (m *Manager) RiskFactor() *big.Float {
 	return m.riskFactor
+}
+
+func (m *Manager) TakerCommission() (*big.Float, error) {
+	ctx, cancelCtx := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelCtx()
+
+	return m.supplier.AccountTakerCommission(ctx)
 }
