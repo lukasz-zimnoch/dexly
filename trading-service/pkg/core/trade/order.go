@@ -37,28 +37,28 @@ func (os OrderSide) String() string {
 }
 
 type Order struct {
-	ID         uuid.UUID
-	PositionID uuid.UUID
-	Side       OrderSide
-	Price      *big.Float
-	Size       *big.Float
-	Time       time.Time
-	Executed   bool
+	ID       uuid.UUID
+	Position *Position
+	Side     OrderSide
+	Price    *big.Float
+	Size     *big.Float
+	Time     time.Time
+	Executed bool
 }
 
 func NewOrder(
-	positionID uuid.UUID,
+	position *Position,
 	orderSide OrderSide,
 	price *big.Float,
 	size *big.Float,
 ) *Order {
 	return &Order{
-		ID:         uuid.New(),
-		PositionID: positionID,
-		Side:       orderSide,
-		Price:      price,
-		Size:       size,
-		Time:       time.Now(),
-		Executed:   false,
+		ID:       uuid.New(),
+		Position: position,
+		Side:     orderSide,
+		Price:    price,
+		Size:     size,
+		Time:     time.Now(),
+		Executed: false,
 	}
 }

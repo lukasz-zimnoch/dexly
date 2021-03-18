@@ -143,6 +143,7 @@ func (pr *PgRepository) GetPositions(
 			positionsByID[result.pgPosition.ID] = position
 		}
 
+		order.Position = position
 		position.Orders = append(position.Orders, order)
 	}
 
@@ -371,7 +372,7 @@ func toPgOrder(order *trade.Order) (*pgOrder, error) {
 
 	return &pgOrder{
 		ID:         order.ID,
-		PositionID: order.PositionID,
+		PositionID: order.Position.ID,
 		Side:       orderSide,
 		Price:      price,
 		Size:       size,
@@ -402,13 +403,13 @@ func fromPgOrder(pgOrder *pgOrder) (*trade.Order, error) {
 	}
 
 	return &trade.Order{
-		ID:         pgOrder.ID,
-		PositionID: pgOrder.PositionID,
-		Side:       orderSide,
-		Price:      price,
-		Size:       size,
-		Time:       pgOrder.Time,
-		Executed:   pgOrder.Executed,
+		ID:       pgOrder.ID,
+		Position: nil, // Position should be set outside
+		Side:     orderSide,
+		Price:    price,
+		Size:     size,
+		Time:     pgOrder.Time,
+		Executed: pgOrder.Executed,
 	}, nil
 }
 

@@ -206,7 +206,7 @@ func (m *Manager) createEntryOrder(
 	position *Position,
 ) (*Order, error) {
 	order := NewOrder(
-		position.ID,
+		position,
 		position.Type.EntryOrderSide(),
 		position.EntryPrice,
 		position.Size,
@@ -225,7 +225,7 @@ func (m *Manager) createExitOrder(
 	price *big.Float,
 ) (*Order, error) {
 	order := NewOrder(
-		position.ID,
+		position,
 		position.Type.ExitOrderSide(),
 		price,
 		position.Size,

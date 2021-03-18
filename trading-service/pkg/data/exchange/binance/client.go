@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/adshao/go-binance"
+	"github.com/adshao/go-binance/common"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trade"
 	"math/big"
 	"time"
 )
+
+const requestTimeout = 1 * time.Minute
 
 type Client struct {
 	delegate *binance.Client
@@ -28,6 +31,9 @@ func (c *Client) Candles(
 	ctx context.Context,
 	filter *candle.Filter,
 ) ([]*candle.Candle, error) {
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
 	klines, err := c.delegate.
 		NewKlinesService().
 		Symbol(filter.Pair).
@@ -35,7 +41,7 @@ func (c *Client) Candles(
 		StartTime(filter.StartTime.UnixNano() / 1e6).
 		EndTime(filter.EndTime.UnixNano() / 1e6).
 		Limit(1000).
-		Do(ctx)
+		Do(requestCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,21 +115,77 @@ func (c *Client) parseKlineEvent(event *binance.WsKlineEvent) *candle.Tick {
 	}
 }
 
-func (c *Client) ExecuteOrder(order *trade.Order) error {
-	// TODO: implementation
-	return nil
+func (c *Client) ExecuteOrder(
+	ctx context.Context,
+	order *trade.Order,
+) (bool, error) {
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
+	response, err := c.delegate.NewCreateOrderService().
+		Symbol(order.Position.Pair).
+		Side(binance.SideType(order.Side.String())).
+		Type(binance.OrderTypeMarket).
+		NewClientOrderID(order.ID.String()).
+		Quantity(order.Size.String()).
+		// fill or kill (FOK) orders are either filled immediately or cancelled
+		TimeInForce(binance.TimeInForceTypeFOK).
+		Do(requestCtx)
+	if err != nil {
+		// Request error - return it to the caller.
+		return false, err
+	}
+
+	if response.Status != binance.OrderStatusTypeFilled {
+		// The order's status is other than FILLED. Because the order is FOK,
+		// it has been probably cancelled. Return that info to the caller
+		// but it's not an error situation.
+		return false, nil
+	}
+
+	// Everything good, the order was FILLED.
+	return true, nil
 }
 
-func (c *Client) IsOrderExecuted(order *trade.Order) (bool, error) {
-	// TODO: implementation
-	return false, nil
+func (c *Client) IsOrderExecuted(
+	ctx context.Context,
+	order *trade.Order,
+) (bool, error) {
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
+	response, err := c.delegate.NewGetOrderService().
+		Symbol(order.Position.Pair).
+		OrigClientOrderID(order.ID.String()).
+		Do(requestCtx)
+	if err != nil {
+		if common.IsAPIError(err) {
+			apiErr := err.(*common.APIError)
+			// -2013 is the code of NO_SUCH_ORDER error according to the docs
+			// https://binance-docs.github.io/apidocs/spot/en/#error-codes
+			if apiErr.Code == -2013 {
+				// Given order doesn't exist so we are returning false to
+				// the caller but it's not an error situation.
+				return false, nil
+			}
+		}
+
+		// Other request error - return it to the caller
+		return false, err
+	}
+
+	// We send FOK orders so an executed order will always have FILLED status.
+	return response.Status == binance.OrderStatusTypeFilled, nil
 }
 
 func (c *Client) AccountBalance(
 	ctx context.Context,
 	asset string,
 ) (*big.Float, error) {
-	account, err := c.delegate.NewGetAccountService().Do(ctx)
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
+	account, err := c.delegate.NewGetAccountService().Do(requestCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +210,15 @@ func (c *Client) AccountBalance(
 func (c *Client) AccountTakerCommission(
 	ctx context.Context,
 ) (*big.Float, error) {
-	// TODO: get from exchange
-	return big.NewFloat(0.001), nil
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
+	account, err := c.delegate.NewGetAccountService().Do(requestCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	return big.NewFloat(float64(account.TakerCommission / 10000)), nil
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {

@@ -15,9 +15,9 @@ type signaler interface {
 }
 
 type executor interface {
-	ExecuteOrder(order *trade.Order) error
+	ExecuteOrder(ctx context.Context, order *trade.Order) (bool, error)
 
-	IsOrderExecuted(order *trade.Order) (bool, error)
+	IsOrderExecuted(ctx context.Context, order *trade.Order) (bool, error)
 }
 
 type pipeline struct {
@@ -59,7 +59,7 @@ func (p *pipeline) loop(ctx context.Context) {
 			}
 
 			for _, order := range p.manager.RefreshOrdersQueue() {
-				alreadyExecuted, err := p.executor.IsOrderExecuted(order)
+				alreadyExecuted, err := p.executor.IsOrderExecuted(ctx, order)
 				if err != nil {
 					p.errChan <- fmt.Errorf(
 						"could not check order execution: [%v]",
@@ -68,18 +68,24 @@ func (p *pipeline) loop(ctx context.Context) {
 					return
 				}
 
-				if !alreadyExecuted {
-					err := p.executor.ExecuteOrder(order)
-					if err != nil {
-						p.errChan <- fmt.Errorf(
-							"could execute order: [%v]",
-							err,
-						)
-						return
-					}
+				if alreadyExecuted {
+					p.manager.NotifyExecution(order)
+					continue
 				}
 
-				p.manager.NotifyExecution(order)
+				executed, err := p.executor.ExecuteOrder(ctx, order)
+				if err != nil {
+					p.errChan <- fmt.Errorf(
+						"could execute order: [%v]",
+						err,
+					)
+					return
+				}
+
+				if executed {
+					p.manager.NotifyExecution(order)
+					continue
+				}
 			}
 		case <-ctx.Done():
 			return
