@@ -5,6 +5,7 @@ set -e
 go build
 
 CONFIG="./configs/config.yaml" \
-LOG_LEVEL="debug" \
-./trading-service
+  LOG_LEVEL="debug" \
+  DB_MIGRATION="on" \
+  ./trading-service
 
