@@ -3,3 +3,7 @@
 *.iws
 *.iml
 *.ipr
+
+### Terraform ###
+credentials.json
+.terraform*
