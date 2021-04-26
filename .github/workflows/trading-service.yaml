@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./trading-service
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -25,6 +28,9 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./trading-service
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -43,6 +49,9 @@ jobs:
       (github.ref == 'refs/heads/master' && github.event_name == 'push')
         || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./trading-service
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
