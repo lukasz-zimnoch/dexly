@@ -56,6 +56,8 @@ func configureLogging() {
 }
 
 func runDatabaseMigration(config *configs.Database) error {
+	logrus.Infof("starting database migration")
+
 	migrationsDir := "file://database/migrations"
 
 	databaseAddress := fmt.Sprintf(
@@ -71,5 +73,17 @@ func runDatabaseMigration(config *configs.Database) error {
 		return err
 	}
 
-	return migration.Up()
+	err = migration.Up()
+	if err != nil {
+		if err == migrate.ErrNoChange {
+			logrus.Infof("database migration skipped as there are no changes")
+			return nil
+		}
+
+		return err
+	}
+
+	logrus.Infof("database migration performed successfully")
+
+	return nil
 }
