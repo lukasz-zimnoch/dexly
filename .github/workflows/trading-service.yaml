@@ -46,7 +46,8 @@ jobs:
   publish:
     needs: test
     if: |
-      (github.ref == 'refs/heads/master' && github.event_name == 'push')
+      (github.ref == 'refs/heads/master'
+        && github.event_name == 'push')
         || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
@@ -79,5 +80,6 @@ jobs:
         env:
           IMAGE_NAME: 'trading-service'
         with:
+          context: ./trading-service
           tags: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
           push: true
