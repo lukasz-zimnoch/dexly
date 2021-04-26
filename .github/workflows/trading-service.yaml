@@ -77,9 +77,7 @@ jobs:
       - name: Build and publish Docker image
         uses: docker/build-push-action@v2
         env:
-          IMAGE_NAME: 'dexly/trading-service'
-          IMAGE_PREFIX: |
-            ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}
+          IMAGE_NAME: 'trading-service'
         with:
-          tags: ${{ env.IMAGE_PREFIX }}/${{ env.IMAGE_NAME }}
+          tags: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
           push: true
