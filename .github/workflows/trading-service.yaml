@@ -16,8 +16,8 @@ jobs:
 
       - name: Install Go
         uses: actions/setup-go@v2
-          with:
-            go-version: 1.15.11
+        with:
+          go-version: 1.15.11
 
       - name: Build
         run: go build .
@@ -31,8 +31,8 @@ jobs:
 
       - name: Install Go
         uses: actions/setup-go@v2
-          with:
-            go-version: 1.15.11
+        with:
+          go-version: 1.15.11
 
       - name: Test
         run: go test ./...
