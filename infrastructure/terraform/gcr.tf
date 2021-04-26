@@ -10,6 +10,6 @@ module "gcr_admin_service_account" {
 
 resource "google_storage_bucket_iam_member" "gcr_admin" {
   bucket = google_container_registry.registry.id
-  role = "roles/storage.objectAdmin"
+  role = "roles/storage.admin"
   member = module.gcr_admin_service_account.iam_email
 }
