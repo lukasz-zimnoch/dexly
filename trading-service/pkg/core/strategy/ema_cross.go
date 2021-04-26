@@ -35,7 +35,9 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 	entryRule := newNearCrossUpIndicatorRule(priceEma, price)
 
 	if entryRule.IsSatisfied(candles.LastIndex(), nil) {
-		entryTarget := big.NewFloat(price.Calculate(candles.LastIndex()).Float())
+		entryTarget := big.NewFloat(
+			price.Calculate(candles.LastIndex()).Float(),
+		)
 
 		priceChangeFactor := 0.1 // TODO: use ATR indicator
 		stopLossFactor := big.NewFloat(1 - priceChangeFactor)

@@ -74,7 +74,6 @@ func NewManager(
 func (m *Manager) NotifySignal(signal *Signal) {
 	m.logger.Infof("received signal [%+v]", signal)
 
-	// TODO: support SHORT signals as well
 	if signal.Type != LONG {
 		m.logger.Warningf("only LONG signals are currently supported")
 		return
