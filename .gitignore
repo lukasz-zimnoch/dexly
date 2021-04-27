@@ -7,3 +7,4 @@
 ### Terraform ###
 credentials.json
 .terraform*
+*.tfstate*

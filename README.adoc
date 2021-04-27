@@ -1,11 +1,90 @@
+:toc: macro
+
 = Dexly
 
 Cryptocurrency trading bot.
 
-== Prerequisites
+toc::[]
 
-Work in progress...
+== Cloud infrastructure
 
-== How to run
+This project contains the configuration of Google Cloud Platform infrastructure
+needed to run all components in a seamless way.
 
-Work in progress...
+=== Prerequisites
+
+To configure the infrastructure on GCP, you will need to:
+
+1. Configure your https://cloud.google.com[account] and
+   https://cloud.google.com/resource-manager/docs/creating-managing-projects[project].
+2. Create a https://cloud.google.com/iam/docs/creating-managing-service-accounts[service account]
+   for Terraform. For simplicity, give it the project's owner role and generate an
+   https://cloud.google.com/iam/docs/creating-managing-service-account-keys[account key].
+   Download the account key and keep it safe, somewhere on your local machine.
+3. Install https://www.terraform.io/[Terraform] (at least 0.15.1) on your
+   local machine.
+
+=== Create infrastructure components
+
+First, set the `GOOGLE_CREDENTIALS` environment variable to point to your
+service account key path, by doing:
+```
+export GOOGLE_CREDENTIALS=<service-account-key>
+```
+
+Then, you need to perform an one-off initialization of the remote state bucket.
+Move to the `infrastructure/terraform/remote-state` directory and invoke:
+```
+terraform init && terraform apply
+```
+
+A Google cloud bucket will be created. Terraform will use it to store its state.
+You can now start creating all cloud resources by moving to the
+`infrastructure/terraform` directory and invoking:
+```
+terraform init
+```
+Once the initialization is done, you can start the entire process by doing:
+```
+terraform apply
+```
+Once the process terminates, all cloud resources should be up and running.
+Please note the outputs as they may be needed in further steps.
+
+=== Destroy infrastructure components
+
+You can quickly destroy all cloud resources by doing:
+```
+terraform destroy
+```
+Remember about setting the service account key path via the `GOOGLE_CREDENTIALS`
+variable.
+
+== Continous integration
+
+This project uses GitHub Actions as continous integration runner. Each service
+contains its workflow definition defined in the `.github/workflows` directory.
+
+Each workflow consists of several jobs:
+
+- `build` which builds the microservice code. This job is performed on all pushes
+  and pull requests.
+- `test` which performs unit and integration tests. This job is performed on all
+  pushes and pull requests.
+- `publish` which builds the Docker image and publishes it to the registry. This
+  job is performed *only* on pushes to the master branch. This job makes use of
+  the Google Container Registry. The registry is configured as part of the
+  infrastructure described in the <<Cloud infrastructure>> section.
+
+The above jobs need several secrets to be defined in the repository settings:
+
+- `GCP_PROJECT_ID` which should contain the GCP project id (e.g. `dexly-309412`).
+- `GCR_REGISTRY_URL` which should point to the registry URL (e.g. `gcr.io`).
+- `GCR_ADMIN_KEY` which should contain the GCR admin key in JSON format. A service
+  account for GCR admin as part of the infrastructure described in the
+  <<Cloud infrastructure>> section. Account key for this service account is
+  printed as `gcr_admin_key` output.
+
+== Continous delivery
+
+Work in progress..
