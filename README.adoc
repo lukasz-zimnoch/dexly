@@ -57,9 +57,9 @@ terraform destroy
 Remember about setting the service account key path via the `GOOGLE_CREDENTIALS`
 variable.
 
-== Continous integration
+== Continuous integration
 
-This project uses GitHub Actions as continous integration runner. Each service
+This project uses GitHub Actions as continuous integration runner. Each service
 contains its workflow definition defined in the `.github/workflows` directory.
 
 Each workflow consists of several jobs:
@@ -82,6 +82,6 @@ The above jobs need several secrets to be defined in the repository settings:
   <<Cloud infrastructure>> section. Account key for this service account is
   printed as `gcr_admin_key` output.
 
-== Continous delivery
+== Continuous deployment
 
 Work in progress..
