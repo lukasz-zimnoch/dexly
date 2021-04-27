@@ -38,16 +38,13 @@ Move to the `infrastructure/terraform/remote-state` directory and invoke:
 terraform init && terraform apply
 ```
 
-A Google cloud bucket will be created. Terraform will use it to store its state.
+A Google Cloud bucket will be created. Terraform will use it to store its state.
 You can now start creating all cloud resources by moving to the
 `infrastructure/terraform` directory and invoking:
 ```
-terraform init
+terraform init && terraform apply
 ```
-Once the initialization is done, you can start the entire process by doing:
-```
-terraform apply
-```
+
 Once the process terminates, all cloud resources should be up and running.
 Please note the outputs as they may be needed in further steps.
 
@@ -78,10 +75,10 @@ Each workflow consists of several jobs:
 
 The above jobs need several secrets to be defined in the repository settings:
 
-- `GCP_PROJECT_ID` which should contain the GCP project id (e.g. `dexly-309412`).
+- `GCP_PROJECT_ID` which should contain the GCP project ID (e.g. `dexly-309412`).
 - `GCR_REGISTRY_URL` which should point to the registry URL (e.g. `gcr.io`).
 - `GCR_ADMIN_KEY` which should contain the GCR admin key in JSON format. A service
-  account for GCR admin as part of the infrastructure described in the
+  account for GCR admin is created as part of the infrastructure described in the
   <<Cloud infrastructure>> section. Account key for this service account is
   printed as `gcr_admin_key` output.
 
