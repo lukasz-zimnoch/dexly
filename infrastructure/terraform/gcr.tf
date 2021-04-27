@@ -3,6 +3,7 @@ resource "google_container_registry" "registry" {}
 module "gcr_admin_service_account" {
   source        = "terraform-google-modules/service-accounts/google"
   version       = "4.0.0"
+  depends_on    = [google_project_service.services]
 
   project_id    = var.project.id
   names         = ["gcr-admin"]
