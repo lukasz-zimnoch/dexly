@@ -1,0 +1,19 @@
+apiVersion: {{ .Values.apiVersion }}
+kind: {{ .Values.kind }}
+metadata:
+  name: trading-service
+  namespace: {{ .Values.metadata.namespace }}
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: {{ .Values.spec.source.repoURL }}
+    path: trading-service/deployments/kubernetes
+    targetRevision: {{ .Values.spec.source.targetRevision }}
+  destination:
+    namespace: {{ .Values.spec.destination.namespace }}
+    server: {{ .Values.spec.destination.server }}
+  syncPolicy:
+	automated:
+	  prune: {{ .Values.spec.syncPolicy.automated.prune }}
+	  allowEmpty: {{ .Values.spec.syncPolicy.automated.allowEmpty }}
+	  selfHeal: {{ .Values.spec.syncPolicy.automated.selfHeal }}

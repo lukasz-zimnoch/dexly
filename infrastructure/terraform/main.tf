@@ -15,21 +15,6 @@ terraform {
       source = "hashicorp/helm"
       version = "2.1.2"
     }
-
-    argocd = {
-      source = "oboukili/argocd"
-      version = "1.2.1"
-    }
-
-    random = {
-      source = "hashicorp/random"
-      version = "3.1.0"
-    }
-
-    null = {
-      source = "hashicorp/null"
-      version = "3.1.0"
-    }
   }
 }
 
@@ -42,10 +27,6 @@ provider "google" {
   region  = var.region.name
   zone    = var.region.zones[0]
 }
-
-provider "random" {}
-
-provider "null" {}
 
 # Project services and APIs.
 resource "google_project_service" "services" {

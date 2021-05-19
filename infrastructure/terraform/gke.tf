@@ -7,13 +7,6 @@ provider "helm" {
   }
 }
 
-# ArgoCD provider.
-provider "argocd" {
-  server_addr = "argo-argocd-server.default.svc.cluster.local"
-  username    = "admin"
-  password    = null_resource.encrypted_argo_admin_password.triggers.original
-}
-
 # GCR admin service account.
 module "gcr_admin_service_account" {
   source     = "terraform-google-modules/service-accounts/google"
@@ -63,73 +56,16 @@ module "gke" {
   ]
 }
 
-# Generate a random password for the ArgoCD admin.
-resource "random_password" "argo_admin_password" {
-  length  = 16
-  special = false
-}
-
-# Encrypt the ArgoCD admin password using bcrypt.
-resource "null_resource" "encrypted_argo_admin_password" {
-  triggers = {
-    original  = random_password.argo_admin_password.result
-    encrypted = bcrypt(random_password.argo_admin_password.result)
-  }
-
-  lifecycle {
-    ignore_changes = [triggers["encrypted"]]
-  }
-}
-
 # Install ArgoCD on the cluster using Helm.
 resource "helm_release" "argo" {
   name       = "argo"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = "3.2.2"
-
-  set {
-    name  = "configs.secret.argocdServerAdminPassword"
-    value = null_resource.encrypted_argo_admin_password.triggers.encrypted
-  }
 }
 
-locals {
-  # List of applications which should be managed by ArgoCD.
-  argo_applications = [
-    "trading-service"
-  ]
-}
-
-# Create ArgoCD application for the trading service.
-resource "argocd_application" "applications" {
-  for_each = toset(local.argo_applications)
-
-  metadata {
-    namespace = "default"
-    name      = each.value
-  }
-
-  spec {
-    project = "default"
-
-    source {
-      repo_url        = "https://github.com/lukasz-zimnoch/dexly"
-      path            = "${each.value}/deployments/kubernetes"
-      target_revision = "master"
-    }
-
-    destination {
-      namespace = "default"
-      server    = "https://kubernetes.default.svc"
-    }
-
-    sync_policy {
-      automated = {
-        prune       = true
-        self_heal   = true
-        allow_empty = true
-      }
-    }
-  }
+# Deploy ArgoCD applications chart.
+resource "helm_release" "argo_applications" {
+  name  = "argo-applications"
+  chart = "../helm/argo-applications"
 }

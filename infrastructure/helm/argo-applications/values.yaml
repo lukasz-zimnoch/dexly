@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  namespace: default
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/lukasz-zimnoch/dexly
+    targetRevision: master
+  destination:
+    namespace: default
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      allowEmpty: true
+      selfHeal: true
