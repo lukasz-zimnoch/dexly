@@ -95,45 +95,41 @@ resource "helm_release" "argo" {
 }
 
 locals {
-  # Common settings for ArgoCD applications.
-  argo_app_commons = {
-    namespace       = "default"
-    project         = "default"
-    repo_url        = "https://github.com/lukasz-zimnoch/dexly"
-    target_revision = "master"
-    server          = "https://kubernetes.default.svc"
+  # List of applications which should be managed by ArgoCD.
+  argo_applications = [
+    "trading-service"
+  ]
+}
 
-    sync_policy = {
+# Create ArgoCD application for the trading service.
+resource "argocd_application" "applications" {
+  for_each = toset(local.argo_applications)
+
+  metadata {
+    namespace = "default"
+    name      = each.value
+  }
+
+  spec {
+    project = "default"
+
+    source {
+      repo_url        = "https://github.com/lukasz-zimnoch/dexly"
+      path            = "${each.value}/deployments/kubernetes"
+      target_revision = "master"
+    }
+
+    destination {
+      namespace = "default"
+      server    = "https://kubernetes.default.svc"
+    }
+
+    sync_policy {
       automated = {
         prune       = true
         self_heal   = true
         allow_empty = true
       }
     }
-  }
-}
-
-# Create ArgoCD application for the trading service.
-resource "argocd_application" "trading-service" {
-  metadata = {
-    namespace = local.argo_app_commons.namespace
-    name      = "trading-service"
-  }
-
-  spec = {
-    project = local.argo_app_commons.project
-
-    source = {
-      repo_url        = local.argo_app_commons.repo_url
-      path            = "trading-service/deployments/kubernetes"
-      target_revision = local.argo_app_commons.target_revision
-    }
-
-    destination = {
-      namespace = local.argo_app_commons.namespace
-      server    = local.argo_app_commons.server
-    }
-
-    sync_policy = local.argo_app_commons.sync_policy
   }
 }
