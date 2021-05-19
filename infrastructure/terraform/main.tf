@@ -10,40 +10,46 @@ terraform {
       source  = "hashicorp/google"
       version = "3.62.0"
     }
+
+    helm = {
+      source = "hashicorp/helm"
+      version = "2.1.2"
+    }
+
+    argocd = {
+      source = "oboukili/argocd"
+      version = "1.2.1"
+    }
+
+    random = {
+      source = "hashicorp/random"
+      version = "3.1.0"
+    }
+
+    null = {
+      source = "hashicorp/null"
+      version = "3.1.0"
+    }
   }
 }
 
-# Providers.
+# Google client config data.
+data "google_client_config" "default" {}
+
+# Google provider.
 provider "google" {
   project = var.project.id
   region  = var.region.name
   zone    = var.region.zones[0]
 }
 
+provider "random" {}
+
+provider "null" {}
+
 # Project services and APIs.
 resource "google_project_service" "services" {
   for_each                   = toset(var.services)
   service                    = each.value
   disable_dependent_services = true
-}
-
-# Make sure the GCR backing bucket exists before assigning IAM roles.
-resource "google_container_registry" "registry" {}
-
-# GCR admin service account.
-module "gcr_admin_service_account" {
-  source        = "terraform-google-modules/service-accounts/google"
-  version       = "4.0.0"
-  depends_on    = [google_project_service.services]
-
-  project_id    = var.project.id
-  names         = ["dexly-gcr-admin"]
-  generate_keys = true
-}
-
-# Set GCR admin service account as storage admin of the GCR backend bucket.
-resource "google_storage_bucket_iam_member" "gcr_admin" {
-  bucket = google_container_registry.registry.id
-  role = "roles/storage.admin"
-  member = module.gcr_admin_service_account.iam_email
 }

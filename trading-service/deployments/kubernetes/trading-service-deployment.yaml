@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading-service
+  template:
+    metadata:
+      labels:
+        app: trading-service
+    spec:
+      containers:
+        - name: trading-service
+          image: gcr.io/dexly-309412/trading-service # TODO: add image tag
+          imagePullPolicy: Always
+          env:
+            - name: CONFIG
+              value: '/mnt/trading-service/configs/config.yaml'
+            - name: LOG_LEVEL
+              value: 'info'
+            - name: DB_MIGRATION
+              value: 'on'
+          volumeMounts:
+            - name: trading-service-config
+              mountPath: /mnt/trading-service/configs
+      volumes:
+        - name: trading-service-config
+          secret:
+            secretName: trading-service-config # TODO: secret management
+            items:
+              - key: config.yaml
+                path: config.yaml

@@ -1,3 +1,41 @@
+# Helm provider.
+provider "helm" {
+  kubernetes {
+    host                   = module.gke.endpoint
+    token                  = data.google_client_config.default.access_token
+    cluster_ca_certificate = base64decode(module.gke.ca_certificate)
+  }
+}
+
+# ArgoCD provider.
+provider "argocd" {
+  server_addr = "argo-argocd-server.default.svc.cluster.local"
+  username    = "admin"
+  password    = null_resource.encrypted_argo_admin_password.triggers.original
+}
+
+# GCR admin service account.
+module "gcr_admin_service_account" {
+  source     = "terraform-google-modules/service-accounts/google"
+  version    = "4.0.0"
+  depends_on = [google_project_service.services]
+
+  project_id    = var.project.id
+  names         = ["dexly-gcr-admin"]
+  generate_keys = true
+}
+
+# Make sure the GCR backing bucket exists before assigning IAM roles.
+resource "google_container_registry" "registry" {}
+
+# Set GCR admin service account as storage admin of the GCR backend bucket.
+resource "google_storage_bucket_iam_member" "gcr_admin" {
+  bucket = google_container_registry.registry.id
+  role   = "roles/storage.admin"
+  member = module.gcr_admin_service_account.iam_email
+}
+
+# Google Kubernetes Engine cluster.
 module "gke" {
   source     = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
   version    = "14.1.0"
@@ -13,15 +51,7 @@ module "gke" {
   ip_range_pods            = var.gke_subnet.pods_ip_range_name
   ip_range_services        = var.gke_subnet.services_ip_range_name
   remove_default_node_pool = true
-  enable_private_endpoint  = true
   enable_private_nodes     = true
-
-  master_authorized_networks = [
-    {
-      cidr_block   = var.gke_subnet.primary_ip_range
-      display_name = var.gke_subnet.name
-    }
-  ]
 
   node_pools = [
     {
@@ -31,4 +61,79 @@ module "gke" {
       node_count   = var.gke_cluster.node_pool_size
     }
   ]
+}
+
+# Generate a random password for the ArgoCD admin.
+resource "random_password" "argo_admin_password" {
+  length  = 16
+  special = false
+}
+
+# Encrypt the ArgoCD admin password using bcrypt.
+resource "null_resource" "encrypted_argo_admin_password" {
+  triggers = {
+    original  = random_password.argo_admin_password.result
+    encrypted = bcrypt(random_password.argo_admin_password.result)
+  }
+
+  lifecycle {
+    ignore_changes = [triggers["encrypted"]]
+  }
+}
+
+# Install ArgoCD on the cluster using Helm.
+resource "helm_release" "argo" {
+  name       = "argo"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = "3.2.2"
+
+  set {
+    name  = "configs.secret.argocdServerAdminPassword"
+    value = null_resource.encrypted_argo_admin_password.triggers.encrypted
+  }
+}
+
+locals {
+  # Common settings for ArgoCD applications.
+  argo_app_commons = {
+    namespace       = "default"
+    project         = "default"
+    repo_url        = "https://github.com/lukasz-zimnoch/dexly"
+    target_revision = "master"
+    server          = "https://kubernetes.default.svc"
+
+    sync_policy = {
+      automated = {
+        prune       = true
+        self_heal   = true
+        allow_empty = true
+      }
+    }
+  }
+}
+
+# Create ArgoCD application for the trading service.
+resource "argocd_application" "trading-service" {
+  metadata = {
+    namespace = local.argo_app_commons.namespace
+    name      = "trading-service"
+  }
+
+  spec = {
+    project = local.argo_app_commons.project
+
+    source = {
+      repo_url        = local.argo_app_commons.repo_url
+      path            = "trading-service/deployments/kubernetes"
+      target_revision = local.argo_app_commons.target_revision
+    }
+
+    destination = {
+      namespace = local.argo_app_commons.namespace
+      server    = local.argo_app_commons.server
+    }
+
+    sync_policy = local.argo_app_commons.sync_policy
+  }
 }

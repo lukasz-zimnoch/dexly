@@ -16,8 +16,8 @@ module "cloud_nat" {
   subnetworks = [
     {
       name                     = var.gke_subnet.name
-      source_ip_ranges_to_nat  = ["LIST_OF_SECONDARY_IP_RANGES"]
-      secondary_ip_range_names = [var.gke_subnet.pods_ip_range_name]
+      source_ip_ranges_to_nat  = ["ALL_IP_RANGES"]
+      secondary_ip_range_names = []
     }
   ]
 }
