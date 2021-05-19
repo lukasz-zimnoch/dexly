@@ -66,6 +66,7 @@ resource "helm_release" "argo" {
 
 # Deploy ArgoCD applications chart.
 resource "helm_release" "argo_applications" {
-  name  = "argo-applications"
-  chart = "../helm/argo-applications"
+  depends_on = [helm_release.argo]
+  name       = "argo-applications"
+  chart      = "../helm/argo-applications"
 }
