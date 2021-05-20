@@ -1,7 +1,6 @@
 package configs
 
 import (
-	"fmt"
 	"github.com/sherifabdlnaby/configuro"
 )
 
