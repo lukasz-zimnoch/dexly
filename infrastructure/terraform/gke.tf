@@ -56,9 +56,9 @@ module "gke" {
   ]
 }
 
-# Install ArgoCD on the cluster using Helm.
-resource "helm_release" "argo" {
-  name       = "argo"
+# Deploy ArgoCD chart.
+resource "helm_release" "argo_cd" {
+  name       = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = "3.2.2"
@@ -66,7 +66,13 @@ resource "helm_release" "argo" {
 
 # Deploy ArgoCD applications chart.
 resource "helm_release" "argo_applications" {
-  depends_on = [helm_release.argo]
+  depends_on = [helm_release.argo_cd]
   name       = "argo-applications"
   chart      = "../helm/argo-applications"
+}
+
+# Deploy Postgres operator chart.
+resource "helm_release" "postgres_operator" {
+  name  = "postgres-operator"
+  chart = "https://github.com/zalando/postgres-operator/raw/v1.6.2/charts/postgres-operator/postgres-operator-1.6.2.tgz"
 }

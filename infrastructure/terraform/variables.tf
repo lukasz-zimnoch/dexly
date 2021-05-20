@@ -59,7 +59,7 @@ variable "gke_cluster" {
   default = {
     name                   = "dexly-gke-cluster"
     node_pool_name         = "dexly-gke-node-pool"
-    node_pool_machine_type = "e2-micro"
+    node_pool_machine_type = "e2-small"
     node_pool_size         = 1
   }
 }

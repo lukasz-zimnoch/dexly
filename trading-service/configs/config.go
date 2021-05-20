@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"fmt"
 	"github.com/sherifabdlnaby/configuro"
 )
 
@@ -23,6 +24,7 @@ type Database struct {
 	User      string
 	Password  string
 	Name      string
+	SSLMode   string
 	Migration bool
 }
 
@@ -48,6 +50,7 @@ func ReadConfig() (*Config, error) {
 			User:     "postgres",
 			Password: "postgres",
 			Name:     "postgres",
+			SSLMode:  "disabled",
 		},
 	}
 

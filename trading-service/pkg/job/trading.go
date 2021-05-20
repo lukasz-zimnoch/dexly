@@ -70,6 +70,7 @@ func connectTradeRepository(
 			User:     config.User,
 			Password: config.Password,
 			Name:     config.Name,
+			SSLMode:  config.SSLMode,
 		},
 	)
 	if err != nil {

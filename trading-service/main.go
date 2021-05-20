@@ -57,11 +57,12 @@ func runDatabaseMigration(config *configs.Database) error {
 	migrationsDir := "file://database/migrations"
 
 	databaseAddress := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable",
+		"postgres://%s:%s@%s/%s?sslmode=%s",
 		config.User,
 		config.Password,
 		config.Address,
 		config.Name,
+		config.SSLMode,
 	)
 
 	migration, err := migrate.New(migrationsDir, databaseAddress)

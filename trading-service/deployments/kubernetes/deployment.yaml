@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading-service
+  template:
+    metadata:
+      labels:
+        app: trading-service
+    spec:
+      containers:
+        - name: trading-service
+          image: gcr.io/dexly-309412/trading-service # TODO: add image tag
+          imagePullPolicy: Always
+          env:
+            - name: CONFIG_DATABASE_ADDRESS
+              value: 'trading-database.default.svc.cluster.local'
+            - name: CONFIG_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres.trading-database.credentials
+                  key: password
+            - name: CONFIG_DATABASE_SSLMODE
+              value: 'require'
+            - name: CONFIG_DATABASE_MIGRATION
+              value: 'true'
