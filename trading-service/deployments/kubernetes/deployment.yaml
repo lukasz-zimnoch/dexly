@@ -20,10 +20,15 @@ spec:
           env:
             - name: CONFIG_DATABASE_ADDRESS
               value: 'trading-database.default.svc.cluster.local'
+            - name: CONFIG_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres.trading-database.credentials.postgresql.acid.zalan.do
+                  key: username
             - name: CONFIG_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres.trading-database.credentials
+                  name: postgres.trading-database.credentials.postgresql.acid.zalan.do
                   key: password
             - name: CONFIG_DATABASE_SSLMODE
               value: 'require'

@@ -7,27 +7,6 @@ provider "helm" {
   }
 }
 
-# GCR admin service account.
-module "gcr_admin_service_account" {
-  source     = "terraform-google-modules/service-accounts/google"
-  version    = "4.0.0"
-  depends_on = [google_project_service.services]
-
-  project_id    = var.project.id
-  names         = ["dexly-gcr-admin"]
-  generate_keys = true
-}
-
-# Make sure the GCR backing bucket exists before assigning IAM roles.
-resource "google_container_registry" "registry" {}
-
-# Set GCR admin service account as storage admin of the GCR backend bucket.
-resource "google_storage_bucket_iam_member" "gcr_admin" {
-  bucket = google_container_registry.registry.id
-  role   = "roles/storage.admin"
-  member = module.gcr_admin_service_account.iam_email
-}
-
 # Google Kubernetes Engine cluster.
 module "gke" {
   source     = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
@@ -54,6 +33,34 @@ module "gke" {
       node_count   = var.gke_cluster.node_pool_size
     }
   ]
+}
+
+# GCR admin service account.
+module "gcr_admin_service_account" {
+  source     = "terraform-google-modules/service-accounts/google"
+  version    = "4.0.0"
+  depends_on = [google_project_service.services]
+
+  project_id    = var.project.id
+  names         = ["dexly-gcr-admin"]
+  generate_keys = true
+}
+
+# Make sure the GCR backing bucket exists before assigning IAM roles.
+resource "google_container_registry" "this" {}
+
+# Set GCR admin service account as storage admin of the GCR backend bucket.
+resource "google_storage_bucket_iam_member" "gcr_admin_sa-gcr_admin" {
+  bucket = google_container_registry.this.id
+  role   = "roles/storage.admin"
+  member = module.gcr_admin_service_account.iam_email
+}
+
+# Set GKE service account as object viewer of the GCR backend bucket.
+resource "google_storage_bucket_iam_member" "gke_sa-gcr_object_viewer" {
+  bucket = google_container_registry.this.id
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.gke.service_account}"
 }
 
 # Deploy ArgoCD chart.
