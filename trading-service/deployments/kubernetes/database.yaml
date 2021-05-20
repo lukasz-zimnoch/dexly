@@ -4,6 +4,7 @@ metadata:
   name: trading-database
   namespace: default
 spec:
+  teamId: 'dexly'
   volume:
     size: 1Gi
   numberOfInstances: 2
