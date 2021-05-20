@@ -4,8 +4,7 @@ set -e
 
 go build
 
-CONFIG="./configs/config.yaml" \
-  LOG_LEVEL="debug" \
-  DB_MIGRATION="on" \
+CONFIG_LOGGING_LEVEL="debug" \
+  CONFIG_DATABASE_MIGRATION="true" \
   ./trading-service
 

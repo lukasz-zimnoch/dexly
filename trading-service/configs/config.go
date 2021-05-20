@@ -1,40 +1,65 @@
 package configs
 
 import (
-	"gopkg.in/yaml.v2"
-	"io/ioutil"
+	"github.com/sherifabdlnaby/configuro"
 )
 
+// Config values can be set using either environment variables with `CONFIG_`
+// prefix or config.yml file placed in working directory.
+// See https://github.com/sherifabdlnaby/configuro.
 type Config struct {
-	Database Database `yaml:"database"`
-	Binance  Binance  `yaml:"binance"`
+	Logging  Logging
+	Database Database
+	Binance  Binance
+}
+
+type Logging struct {
+	Level  string
+	Format string
 }
 
 type Database struct {
-	Address  string `yaml:"address"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
+	Address   string
+	User      string
+	Password  string
+	Name      string
+	Migration bool
 }
 
 type Binance struct {
-	ApiKey    string   `yaml:"apiKey"`
-	SecretKey string   `yaml:"secretKey"`
-	Pairs     []string `yaml:"pairs"`
+	ApiKey    string
+	SecretKey string
+	Pairs     []string
 }
 
-func ReadConfig(configPath string) (*Config, error) {
-	var config Config
-
-	configYaml, err := ioutil.ReadFile(configPath)
+func ReadConfig() (*Config, error) {
+	loader, err := configuro.NewConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	err = yaml.Unmarshal(configYaml, &config)
+	// Default config values.
+	config := &Config{
+		Logging: Logging{
+			Level: "info",
+		},
+		Database: Database{
+			Address:  "localhost:5432",
+			User:     "postgres",
+			Password: "postgres",
+			Name:     "postgres",
+		},
+	}
+
+	err = loader.Load(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	err = loader.Validate(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }

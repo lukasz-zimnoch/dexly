@@ -12,21 +12,18 @@ import (
 	"os"
 )
 
-func init() {
-	configureLogging()
-}
-
 func main() {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()
 
-	configPath := os.Getenv("CONFIG")
-	config, err := configs.ReadConfig(configPath)
+	config, err := configs.ReadConfig()
 	if err != nil {
 		logrus.Fatalf("could not read config: [%v]", err)
 	}
 
-	if os.Getenv("DB_MIGRATION") == "on" {
+	configureLogging(&config.Logging)
+
+	if config.Database.Migration {
 		if err := runDatabaseMigration(&config.Database); err != nil {
 			logrus.Fatalf("could not run database migration: [%v]", err)
 		}
@@ -35,8 +32,8 @@ func main() {
 	job.RunTrading(ctx, config)
 }
 
-func configureLogging() {
-	if os.Getenv("LOG_FORMAT") == "json" {
+func configureLogging(config *configs.Logging) {
+	if config.Format == "json" {
 		logrus.SetFormatter(&logrus.JSONFormatter{})
 	} else {
 		logrus.SetFormatter(&logrus.TextFormatter{
@@ -44,10 +41,9 @@ func configureLogging() {
 		})
 	}
 
-	logLevel, err := logrus.ParseLevel(os.Getenv("LOG_LEVEL"))
+	logLevel, err := logrus.ParseLevel(config.Level)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "could not parse log level: [%v]", err)
-		os.Exit(1)
+		logrus.Fatalf("could not parse log level: [%v]", err)
 	}
 
 	logrus.SetLevel(logLevel)

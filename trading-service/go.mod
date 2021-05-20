@@ -11,6 +11,6 @@ require (
 	github.com/jmoiron/sqlx v1.3.1
 	github.com/sdcoffey/big v0.4.1
 	github.com/sdcoffey/techan v0.12.0
+	github.com/sherifabdlnaby/configuro v0.0.2
 	github.com/sirupsen/logrus v1.7.0
-	gopkg.in/yaml.v2 v2.4.0
 )
