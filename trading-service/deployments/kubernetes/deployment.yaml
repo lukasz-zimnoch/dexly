@@ -34,3 +34,5 @@ spec:
               value: 'require'
             - name: CONFIG_DATABASE_MIGRATION
               value: 'true'
+            - name: CONFIG_LOGGING_FORMAT
+              value: 'json'
