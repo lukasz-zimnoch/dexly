@@ -1,11 +1,14 @@
 package strategy
 
 import (
+	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/candle"
+	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/trade"
 	techanbig "github.com/sdcoffey/big"
 	"github.com/sdcoffey/techan"
 	"math/big"
+	"strings"
 )
 
 type candleSupplier interface {
@@ -14,11 +17,16 @@ type candleSupplier interface {
 
 // TODO: get rid of the `techan` library
 type EmaCross struct {
+	logger         logger.Logger
 	candleSupplier candleSupplier
 }
 
-func NewEmaCross(candleSupplier candleSupplier) *EmaCross {
+func NewEmaCross(
+	logger logger.Logger,
+	candleSupplier candleSupplier,
+) *EmaCross {
 	return &EmaCross{
+		logger:         logger,
 		candleSupplier: candleSupplier,
 	}
 }
@@ -30,13 +38,18 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 		candles.AddCandle(toTechanCandle(currentCandle))
 	}
 
+	lastIndex := candles.LastIndex()
 	price := techan.NewClosePriceIndicator(candles)
 	priceEma := techan.NewEMAIndicator(price, 50)
 	entryRule := newNearCrossUpIndicatorRule(priceEma, price)
 
-	if entryRule.IsSatisfied(candles.LastIndex()-1, nil) {
+	ec.logIndicators(price, priceEma, lastIndex)
+
+	// Check against the second to last index because the last index is not
+	// yet stable as its value changes.
+	if entryRule.IsSatisfied(lastIndex-1, nil) {
 		entryTarget := big.NewFloat(
-			price.Calculate(candles.LastIndex()).Float(),
+			price.Calculate(lastIndex).Float(),
 		)
 
 		priceChangeFactor := 0.025 // TODO: use ATR indicator
@@ -111,4 +124,35 @@ func (ncr nearCrossRule) IsSatisfied(
 	}
 
 	return false
+}
+
+func (ec *EmaCross) logIndicators(
+	price,
+	priceEma techan.Indicator,
+	lastIndex int,
+) {
+	indexes := []int{lastIndex, lastIndex - 1, lastIndex - 2}
+
+	ec.logger.Debugf(
+		"price [%v], EMA [%v]",
+		stringifyIndicator(price, indexes),
+		stringifyIndicator(priceEma, indexes),
+	)
+}
+
+func stringifyIndicator(indicator techan.Indicator, indexes []int) string {
+	components := make([]string, 0)
+
+	for _, index := range indexes {
+		components = append(
+			components,
+			fmt.Sprintf(
+				"%v=%v",
+				index,
+				indicator.Calculate(index).FormattedString(2),
+			),
+		)
+	}
+
+	return strings.Join(components, " ")
 }

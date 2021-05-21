@@ -147,6 +147,7 @@ func (e *Engine) runWorker(
 		workerCtx,
 		logger,
 		strategy.NewEmaCross(
+			logger,
 			candleRegistry,
 		),
 		trade.NewManager(

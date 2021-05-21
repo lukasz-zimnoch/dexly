@@ -146,7 +146,7 @@ func (c *Client) ExecuteOrder(
 	symbol := order.Position.Pair
 	symbolInfo, ok := c.findSymbolInfo(symbol)
 	if !ok {
-		return false, fmt.Errorf("could not find info for symbol: %v", symbol)
+		return false, fmt.Errorf("could not find info for symbol: [%v]", symbol)
 	}
 
 	response, err := c.delegate.NewCreateOrderService().
