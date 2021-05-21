@@ -14,17 +14,34 @@ import (
 const requestTimeout = 1 * time.Minute
 
 type Client struct {
-	delegate *binance.Client
+	delegate     *binance.Client
+	exchangeInfo *binance.ExchangeInfo
 }
 
-func NewClient(apiKey, secretKey string, testnet bool) *Client {
+func NewClient(
+	ctx context.Context,
+	apiKey,
+	secretKey string,
+	testnet bool,
+) (*Client, error) {
 	binanceClient := binance.NewClient(apiKey, secretKey)
 
 	if testnet {
 		binanceClient.BaseURL = "https://testnet.binance.vision"
 	}
 
-	return &Client{binanceClient}
+	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
+	defer cancelRequestCtx()
+
+	exchangeInfo, err := binanceClient.NewExchangeInfoService().Do(requestCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Client{
+		delegate:     binanceClient,
+		exchangeInfo: exchangeInfo,
+	}, nil
 }
 
 func (c *Client) Name() string {
@@ -126,13 +143,19 @@ func (c *Client) ExecuteOrder(
 	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
 	defer cancelRequestCtx()
 
+	symbol := order.Position.Pair
+	symbolInfo, ok := c.findSymbolInfo(symbol)
+	if !ok {
+		return false, fmt.Errorf("could not find info for symbol: %v", symbol)
+	}
+
 	response, err := c.delegate.NewCreateOrderService().
-		Symbol(order.Position.Pair).
+		Symbol(symbol).
 		Side(binance.SideType(order.Side.String())).
 		Type(binance.OrderTypeLimit).
 		NewClientOrderID(order.ID.String()).
-		Price(order.Price.String()).
-		Quantity(order.Size.String()).
+		Price(order.Price.Text('f', symbolInfo.QuotePrecision)).
+		Quantity(order.Size.Text('f', symbolInfo.BaseAssetPrecision)).
 		// fill or kill (FOK) orders are either filled immediately or cancelled
 		TimeInForce(binance.TimeInForceTypeFOK).
 		Do(requestCtx)
@@ -224,6 +247,16 @@ func (c *Client) AccountTakerCommission(
 	}
 
 	return big.NewFloat(float64(account.TakerCommission / 10000)), nil
+}
+
+func (c *Client) findSymbolInfo(symbol string) (*binance.Symbol, bool) {
+	for _, symbolInfo := range c.exchangeInfo.Symbols {
+		if symbolInfo.Symbol == symbol {
+			return &symbolInfo, true
+		}
+	}
+
+	return nil, false
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {

@@ -25,12 +25,15 @@ func RunTrading(ctx context.Context, config *configs.Config) {
 		return
 	}
 
-	engines := make([]*worker.Engine, 0)
+	binanceEngine, err := runBinanceEngine(ctx, &config.Binance, tradeRepository)
+	if err != nil {
+		logrus.Errorf("could not create binance engine: [%v]", err)
+		return
+	}
 
-	engines = append(
-		engines,
-		runBinanceEngine(ctx, &config.Binance, tradeRepository),
-	)
+	engines := []*worker.Engine{
+		binanceEngine,
+	}
 
 	ticker := time.NewTicker(workerEnginesActivityCheckTick)
 	defer ticker.Stop()
@@ -84,19 +87,28 @@ func runBinanceEngine(
 	ctx context.Context,
 	config *configs.Binance,
 	tradeRepository trade.Repository,
-) *worker.Engine {
+) (*worker.Engine, error) {
 	if config.Testnet {
-		logrus.Info("Binance engine uses testnet mode")
+		logrus.Info("binance engine is set to testnet mode")
 	}
 
-	exchange := binance.NewClient(config.ApiKey, config.SecretKey, config.Testnet)
+	exchange, err := binance.NewClient(
+		ctx,
+		config.ApiKey,
+		config.SecretKey,
+		config.Testnet,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	engine := worker.NewEngine(exchange, tradeRepository)
 
 	for _, pair := range config.Pairs {
 		engine.ActivateWorker(ctx, parsePair(pair))
 	}
 
-	return engine
+	return engine, nil
 }
 
 func parsePair(pair string) worker.Pair {
