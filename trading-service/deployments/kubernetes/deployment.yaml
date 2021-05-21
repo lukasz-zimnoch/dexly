@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: trading-service
   namespace: default
+  labels:
+    app: trading-service
 spec:
   replicas: 1
   selector:

@@ -129,8 +129,9 @@ func (c *Client) ExecuteOrder(
 	response, err := c.delegate.NewCreateOrderService().
 		Symbol(order.Position.Pair).
 		Side(binance.SideType(order.Side.String())).
-		Type(binance.OrderTypeMarket).
+		Type(binance.OrderTypeLimit).
 		NewClientOrderID(order.ID.String()).
+		Price(order.Price.String()).
 		Quantity(order.Size.String()).
 		// fill or kill (FOK) orders are either filled immediately or cancelled
 		TimeInForce(binance.TimeInForceTypeFOK).

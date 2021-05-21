@@ -3,6 +3,8 @@ kind: postgresql
 metadata:
   name: trading-database
   namespace: default
+  labels:
+    app: trading-service
 spec:
   teamId: 'trading'
   volume:
