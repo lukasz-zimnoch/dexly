@@ -34,7 +34,7 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 	priceEma := techan.NewEMAIndicator(price, 50)
 	entryRule := newNearCrossUpIndicatorRule(priceEma, price)
 
-	if entryRule.IsSatisfied(candles.LastIndex(), nil) {
+	if entryRule.IsSatisfied(candles.LastIndex()-1, nil) {
 		entryTarget := big.NewFloat(
 			price.Calculate(candles.LastIndex()).Float(),
 		)
