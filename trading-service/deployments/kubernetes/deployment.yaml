@@ -20,6 +20,8 @@ spec:
           image: gcr.io/dexly-309412/trading-service # TODO: add image tag
           imagePullPolicy: Always
           env:
+            - name: CONFIG_LOGGING_LEVEL
+              value: 'debug'
             - name: CONFIG_LOGGING_FORMAT
               value: 'json'
             - name: CONFIG_DATABASE_ADDRESS
