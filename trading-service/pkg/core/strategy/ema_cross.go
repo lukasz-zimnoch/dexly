@@ -31,7 +31,7 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 	}
 
 	price := techan.NewClosePriceIndicator(candles)
-	priceEma := techan.NewEMAIndicator(price, 100)
+	priceEma := techan.NewEMAIndicator(price, 50)
 	entryRule := newNearCrossUpIndicatorRule(priceEma, price)
 
 	if entryRule.IsSatisfied(candles.LastIndex(), nil) {
@@ -39,7 +39,7 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 			price.Calculate(candles.LastIndex()).Float(),
 		)
 
-		priceChangeFactor := 0.1 // TODO: use ATR indicator
+		priceChangeFactor := 0.025 // TODO: use ATR indicator
 		stopLossFactor := big.NewFloat(1 - priceChangeFactor)
 		takeProfitFactor := big.NewFloat(1 + (2 * priceChangeFactor))
 
