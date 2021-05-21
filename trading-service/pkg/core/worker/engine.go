@@ -89,7 +89,7 @@ func (e *Engine) newContextLogger(pair Pair) logger.Logger {
 	return logger.WithFields(
 		map[string]interface{}{
 			"exchange": e.exchange.Name(),
-			"pair":     pair,
+			"pair":     pair.String(),
 			"interval": workerInterval,
 		},
 	)

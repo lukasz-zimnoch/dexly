@@ -233,8 +233,8 @@ func (pr *PgRepository) UpdateOrder(order *trade.Order) error {
 
 type pgPosition struct {
 	ID              uuid.UUID
-	Type            pgtype.EnumType
-	Status          pgtype.EnumType
+	Type            string
+	Status          string
 	EntryPrice      pgtype.Numeric `db:"entry_price"`
 	Size            pgtype.Numeric
 	TakeProfitPrice pgtype.Numeric `db:"take_profit_price"`
@@ -245,16 +245,6 @@ type pgPosition struct {
 }
 
 func toPgPosition(position *trade.Position) (*pgPosition, error) {
-	positionType, err := toPgEnum(position.Type.String())
-	if err != nil {
-		return nil, err
-	}
-
-	positionStatus, err := toPgEnum(position.Status.String())
-	if err != nil {
-		return nil, err
-	}
-
 	entryPrice, err := toPgNumeric(position.EntryPrice)
 	if err != nil {
 		return nil, err
@@ -277,8 +267,8 @@ func toPgPosition(position *trade.Position) (*pgPosition, error) {
 
 	return &pgPosition{
 		ID:              position.ID,
-		Type:            positionType,
-		Status:          positionStatus,
+		Type:            position.Type.String(),
+		Status:          position.Status.String(),
 		EntryPrice:      entryPrice,
 		Size:            size,
 		TakeProfitPrice: takeProfitPrice,
@@ -290,22 +280,12 @@ func toPgPosition(position *trade.Position) (*pgPosition, error) {
 }
 
 func fromPgPosition(pgPosition *pgPosition) (*trade.Position, error) {
-	positionTypeString, err := fromPgEnum(pgPosition.Type)
+	positionType, err := trade.ParsePositionType(pgPosition.Type)
 	if err != nil {
 		return nil, err
 	}
 
-	positionType, err := trade.ParsePositionType(positionTypeString)
-	if err != nil {
-		return nil, err
-	}
-
-	positionStatusString, err := fromPgEnum(pgPosition.Status)
-	if err != nil {
-		return nil, err
-	}
-
-	positionStatus, err := trade.ParsePositionStatus(positionStatusString)
+	positionStatus, err := trade.ParsePositionStatus(pgPosition.Status)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +327,7 @@ func fromPgPosition(pgPosition *pgPosition) (*trade.Position, error) {
 type pgOrder struct {
 	ID         uuid.UUID
 	PositionID uuid.UUID `db:"position_id"`
-	Side       pgtype.EnumType
+	Side       string
 	Price      pgtype.Numeric
 	Size       pgtype.Numeric
 	Time       time.Time
@@ -355,11 +335,6 @@ type pgOrder struct {
 }
 
 func toPgOrder(order *trade.Order) (*pgOrder, error) {
-	orderSide, err := toPgEnum(order.Side.String())
-	if err != nil {
-		return nil, err
-	}
-
 	price, err := toPgNumeric(order.Price)
 	if err != nil {
 		return nil, err
@@ -373,7 +348,7 @@ func toPgOrder(order *trade.Order) (*pgOrder, error) {
 	return &pgOrder{
 		ID:         order.ID,
 		PositionID: order.Position.ID,
-		Side:       orderSide,
+		Side:       order.Side.String(),
 		Price:      price,
 		Size:       size,
 		Time:       order.Time,
@@ -382,12 +357,7 @@ func toPgOrder(order *trade.Order) (*pgOrder, error) {
 }
 
 func fromPgOrder(pgOrder *pgOrder) (*trade.Order, error) {
-	orderSideString, err := fromPgEnum(pgOrder.Side)
-	if err != nil {
-		return nil, err
-	}
-
-	orderSide, err := trade.ParseOrderSide(orderSideString)
+	orderSide, err := trade.ParseOrderSide(pgOrder.Side)
 	if err != nil {
 		return nil, err
 	}
@@ -432,24 +402,4 @@ func fromPgNumeric(value pgtype.Numeric) (*big.Float, error) {
 	}
 
 	return big.NewFloat(result), nil
-}
-
-func toPgEnum(value string) (pgtype.EnumType, error) {
-	var result pgtype.EnumType
-
-	if err := result.Set(value); err != nil {
-		return pgtype.EnumType{}, err
-	}
-
-	return result, nil
-}
-
-func fromPgEnum(value pgtype.EnumType) (string, error) {
-	var result string
-
-	if err := value.AssignTo(&value); err != nil {
-		return "", err
-	}
-
-	return result, nil
 }
