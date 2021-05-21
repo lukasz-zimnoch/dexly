@@ -85,7 +85,11 @@ func runBinanceEngine(
 	config *configs.Binance,
 	tradeRepository trade.Repository,
 ) *worker.Engine {
-	exchange := binance.NewClient(config.ApiKey, config.SecretKey)
+	if config.Testnet {
+		logrus.Info("Binance engine uses testnet mode")
+	}
+
+	exchange := binance.NewClient(config.ApiKey, config.SecretKey, config.Testnet)
 	engine := worker.NewEngine(exchange, tradeRepository)
 
 	for _, pair := range config.Pairs {

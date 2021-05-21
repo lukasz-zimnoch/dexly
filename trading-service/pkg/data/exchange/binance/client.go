@@ -17,10 +17,14 @@ type Client struct {
 	delegate *binance.Client
 }
 
-func NewClient(apiKey, secretKey string) *Client {
-	return &Client{
-		delegate: binance.NewClient(apiKey, secretKey),
+func NewClient(apiKey, secretKey string, testnet bool) *Client {
+	binanceClient := binance.NewClient(apiKey, secretKey)
+
+	if testnet {
+		binanceClient.BaseURL = "https://testnet.binance.vision"
 	}
+
+	return &Client{binanceClient}
 }
 
 func (c *Client) Name() string {

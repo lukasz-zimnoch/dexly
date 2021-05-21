@@ -18,6 +18,8 @@ spec:
           image: gcr.io/dexly-309412/trading-service # TODO: add image tag
           imagePullPolicy: Always
           env:
+            - name: CONFIG_LOGGING_FORMAT
+              value: 'json'
             - name: CONFIG_DATABASE_ADDRESS
               value: 'trading-database.default.svc.cluster.local'
             - name: CONFIG_DATABASE_USER
@@ -34,5 +36,21 @@ spec:
               value: 'require'
             - name: CONFIG_DATABASE_MIGRATION
               value: 'true'
-            - name: CONFIG_LOGGING_FORMAT
-              value: 'json'
+            # TODO: Binance config is temporary. Move it to the app level.
+            - name: CONFIG_BINANCE_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: apiKey
+            - name: CONFIG_BINANCE_SECRETKEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: secretKey
+            - name: CONFIG_BINANCE_TESTNET
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: testnet
+            - name: CONFIG_BINANCE_PAIRS
+              value: 'ETH/USDT'
