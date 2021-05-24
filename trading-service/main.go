@@ -33,11 +33,19 @@ func main() {
 }
 
 func configureLogging(config *configs.Logging) {
+	fieldMap := logrus.FieldMap{
+		logrus.FieldKeyLevel: "severity",
+		logrus.FieldKeyMsg:   "message",
+	}
+
 	if config.Format == "json" {
-		logrus.SetFormatter(&logrus.JSONFormatter{})
+		logrus.SetFormatter(&logrus.JSONFormatter{
+			FieldMap: fieldMap,
+		})
 	} else {
 		logrus.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
+			FieldMap:      fieldMap,
 		})
 	}
 

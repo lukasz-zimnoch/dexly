@@ -76,7 +76,7 @@ func (p *pipeline) loop(ctx context.Context) {
 				executed, err := p.executor.ExecuteOrder(ctx, order)
 				if err != nil {
 					p.errChan <- fmt.Errorf(
-						"could execute order: [%v]",
+						"could not execute order: [%v]",
 						err,
 					)
 					return

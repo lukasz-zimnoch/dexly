@@ -136,6 +136,10 @@ func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
 		return nil, err
 	}
 
+	if accountBalance.Cmp(big.NewFloat(0)) == 0 {
+		return nil, fmt.Errorf("account balance is zero")
+	}
+
 	accountRisk := new(big.Float).Mul(
 		accountBalance,
 		m.accountSupplier.RiskFactor(),
