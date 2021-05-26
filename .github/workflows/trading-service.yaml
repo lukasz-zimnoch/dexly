@@ -76,6 +76,7 @@ jobs:
           password: ${{ secrets.GCR_ADMIN_KEY }}
 
       - name: Build and publish Docker image
+        id: docker-image
         uses: docker/build-push-action@v2
         env:
           IMAGE_NAME: 'trading-service'
@@ -83,3 +84,17 @@ jobs:
           context: ./trading-service
           tags: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
           push: true
+
+      - name: Update Kubernetes manifest
+        uses: fjogeleit/yaml-update-action@v0.4.0
+        env:
+          IMAGE_NAME: 'trading-service'
+          IMAGE_DIGEST: sha256:${{ steps.docker-image.outputs.digest }}
+        with:
+          valueFile: 'deployments/kubernetes/deployment.yaml'
+          propertyPath: 'spec.template.spec.containers[0].image'
+          value: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
+          branch: 'master'
+          message: 'Auto-update of ${{ env.IMAGE_NAME }} manifest'
+          commitChange: 'true'
+          updateFile: 'true'
