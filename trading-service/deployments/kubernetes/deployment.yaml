@@ -17,37 +17,39 @@ spec:
     spec:
       containers:
         - name: trading-service
-          image: gcr.io/dexly-309412/trading-service
+          image: >-
+            gcr.io/dexly-309412/trading-service@sha256:2390ed712675a8d63fb07f9ae9b68e44c98adc958a94e816adbb743ed35c4583
           imagePullPolicy: Always
           resources:
             requests:
-              memory: "128Mi"
-              cpu: "100m"
+              memory: 128Mi
+              cpu: 100m
             limits:
-              memory: "512Mi"
-              cpu: "1000m"
+              memory: 512Mi
+              cpu: 1000m
           env:
             - name: CONFIG_LOGGING_LEVEL
-              value: 'debug'
+              value: debug
             - name: CONFIG_LOGGING_FORMAT
-              value: 'json'
+              value: json
             - name: CONFIG_DATABASE_ADDRESS
-              value: 'trading-database.default.svc.cluster.local'
+              value: trading-database.default.svc.cluster.local
             - name: CONFIG_DATABASE_USER
               valueFrom:
                 secretKeyRef:
-                  name: postgres.trading-database.credentials.postgresql.acid.zalan.do
+                  name: >-
+                    postgres.trading-database.credentials.postgresql.acid.zalan.do
                   key: username
             - name: CONFIG_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: postgres.trading-database.credentials.postgresql.acid.zalan.do
+                  name: >-
+                    postgres.trading-database.credentials.postgresql.acid.zalan.do
                   key: password
             - name: CONFIG_DATABASE_SSLMODE
-              value: 'require'
+              value: require
             - name: CONFIG_DATABASE_MIGRATION
               value: 'true'
-            # TODO: Binance config is temporary. Move it to the app level.
             - name: CONFIG_BINANCE_APIKEY
               valueFrom:
                 secretKeyRef:
@@ -64,4 +66,4 @@ spec:
                   name: binance-config
                   key: testnet
             - name: CONFIG_BINANCE_PAIRS
-              value: 'ETH/USDT'
+              value: ETH/USDT
