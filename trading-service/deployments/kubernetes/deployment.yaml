@@ -17,8 +17,15 @@ spec:
     spec:
       containers:
         - name: trading-service
-          image: gcr.io/dexly-309412/trading-service # TODO: add image tag
+          image: gcr.io/dexly-309412/trading-service
           imagePullPolicy: Always
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
           env:
             - name: CONFIG_LOGGING_LEVEL
               value: 'debug'
