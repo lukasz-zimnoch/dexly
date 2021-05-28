@@ -28,8 +28,6 @@ spec:
               memory: 512Mi
               cpu: 1000m
           env:
-            - name: CONFIG_LOGGING_LEVEL
-              value: debug
             - name: CONFIG_LOGGING_FORMAT
               value: json
             - name: CONFIG_DATABASE_ADDRESS
