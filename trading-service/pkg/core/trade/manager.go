@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+const precision = 6
 const orderValidityTime = 1 * time.Minute
 
 type priceSupplier interface {
@@ -178,10 +179,10 @@ func (m *Manager) openPosition(
 
 	position := NewPosition(
 		signal.Type,
-		signal.EntryTarget,
-		positionSize,
-		takeProfitPrice,
-		stopLossPrice,
+		signal.EntryTarget.SetPrec(precision),
+		positionSize.SetPrec(precision),
+		takeProfitPrice.SetPrec(precision),
+		stopLossPrice.SetPrec(precision),
 		m.pair,
 		m.exchange,
 	)
