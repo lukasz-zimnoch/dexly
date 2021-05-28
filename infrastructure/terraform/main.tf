@@ -1,4 +1,3 @@
-# Terraform config.
 terraform {
   backend "gcs" {
     bucket = "dexly-terraform-backend-bucket"
@@ -18,17 +17,14 @@ terraform {
   }
 }
 
-# Google client config data.
 data "google_client_config" "default" {}
 
-# Google provider.
 provider "google" {
   project = var.project.id
   region  = var.region.name
   zone    = var.region.zones[0]
 }
 
-# Project services and APIs.
 resource "google_project_service" "services" {
   for_each                   = toset(var.services)
   service                    = each.value

@@ -1,4 +1,3 @@
-# Helm provider.
 provider "helm" {
   kubernetes {
     host                   = module.gke.endpoint
@@ -7,7 +6,10 @@ provider "helm" {
   }
 }
 
-# Google Kubernetes Engine cluster.
+# ------------------------------------------------------------------------------
+# Create a Google Kubernetes Engine private cluster.
+# ------------------------------------------------------------------------------
+
 module "gke" {
   source     = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
   version    = "14.1.0"
@@ -35,7 +37,12 @@ module "gke" {
   ]
 }
 
-# GCR admin service account.
+# ------------------------------------------------------------------------------
+# Setup the Google Container Registry. Create a GCR admin service account and
+# make it an admin of the underlying bucket. Grant view access for the service
+# account used by GKE.
+# ------------------------------------------------------------------------------
+
 module "gcr_admin_service_account" {
   source     = "terraform-google-modules/service-accounts/google"
   version    = "4.0.0"
@@ -46,24 +53,24 @@ module "gcr_admin_service_account" {
   generate_keys = true
 }
 
-# Make sure the GCR backing bucket exists before assigning IAM roles.
 resource "google_container_registry" "this" {}
 
-# Set GCR admin service account as storage admin of the GCR backend bucket.
 resource "google_storage_bucket_iam_member" "gcr_admin_sa-gcr_admin" {
   bucket = google_container_registry.this.id
   role   = "roles/storage.admin"
   member = module.gcr_admin_service_account.iam_email
 }
 
-# Set GKE service account as object viewer of the GCR backend bucket.
 resource "google_storage_bucket_iam_member" "gke_sa-gcr_object_viewer" {
   bucket = google_container_registry.this.id
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${module.gke.service_account}"
 }
 
-# Deploy ArgoCD chart.
+# ------------------------------------------------------------------------------
+# Deploy ArgoCD and setup it to manage project applications (services).
+# ------------------------------------------------------------------------------
+
 resource "helm_release" "argo_cd" {
   name       = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
@@ -71,14 +78,16 @@ resource "helm_release" "argo_cd" {
   version    = "3.2.2"
 }
 
-# Deploy ArgoCD applications chart.
 resource "helm_release" "argo_applications" {
   depends_on = [helm_release.argo_cd]
   name       = "argo-applications"
   chart      = "../helm/argo-applications"
 }
 
-# Deploy Postgres operator chart.
+# ------------------------------------------------------------------------------
+# Deploy Postgres operator.
+# ------------------------------------------------------------------------------
+
 resource "helm_release" "postgres_operator" {
   name  = "postgres-operator"
   chart = "https://github.com/zalando/postgres-operator/raw/v1.6.2/charts/postgres-operator/postgres-operator-1.6.2.tgz"
