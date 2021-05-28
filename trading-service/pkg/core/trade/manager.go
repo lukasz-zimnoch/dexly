@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const precision = 6
+const precision = 4
 const orderValidityTime = 1 * time.Minute
 
 type priceSupplier interface {
