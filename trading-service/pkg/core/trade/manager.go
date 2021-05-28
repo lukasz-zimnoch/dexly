@@ -3,6 +3,7 @@ package trade
 import (
 	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading-service/pkg/core/logger"
+	"math"
 	"math/big"
 	"sort"
 	"time"
@@ -179,10 +180,10 @@ func (m *Manager) openPosition(
 
 	position := NewPosition(
 		signal.Type,
-		signal.EntryTarget.SetPrec(precision),
-		positionSize.SetPrec(precision),
-		takeProfitPrice.SetPrec(precision),
-		stopLossPrice.SetPrec(precision),
+		roundToPrecision(signal.EntryTarget, precision),
+		roundToPrecision(positionSize, precision),
+		roundToPrecision(takeProfitPrice, precision),
+		roundToPrecision(stopLossPrice, precision),
 		m.pair,
 		m.exchange,
 	)
@@ -409,4 +410,10 @@ func ordersBreakdown(position *Position) (*Order, *Order, error) {
 	} else {
 		return nil, nil, fmt.Errorf("wrong orders count: [%v]", ordersCount)
 	}
+}
+
+func roundToPrecision(value *big.Float, precision int) *big.Float {
+	float, _ := value.Float64()
+	precisionPower := math.Pow(10, float64(precision))
+	return big.NewFloat(math.Round(float*precisionPower) / precisionPower)
 }
