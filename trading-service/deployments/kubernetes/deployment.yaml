@@ -18,7 +18,7 @@ spec:
       containers:
         - name: trading-service
           image: >-
-            gcr.io/dexly-309412/trading-service@sha256:1889f140d9b213a57e5385d1baac2a5a402270b6e5c3bcd6533734c6c9f8a770
+            gcr.io/dexly-309412/trading-service@sha256:0fe4854700de6a2286229749f308c251a3c3317b142167f4b9b66edde4f7ea7b
           imagePullPolicy: Always
           resources:
             requests:
