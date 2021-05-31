@@ -9,7 +9,10 @@ import (
 	"github.com/sdcoffey/techan"
 	"math/big"
 	"strings"
+	"time"
 )
+
+const strategyBackoff = 5 * time.Minute
 
 type candleSupplier interface {
 	Candles() []*candle.Candle
@@ -19,6 +22,7 @@ type candleSupplier interface {
 type EmaCross struct {
 	logger         logger.Logger
 	candleSupplier candleSupplier
+	lastSignalTime time.Time
 }
 
 func NewEmaCross(
@@ -28,10 +32,15 @@ func NewEmaCross(
 	return &EmaCross{
 		logger:         logger,
 		candleSupplier: candleSupplier,
+		lastSignalTime: time.Now(),
 	}
 }
 
 func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
+	if time.Now().Before(ec.lastSignalTime.Add(strategyBackoff)) {
+		return nil, false
+	}
+
 	candles := techan.NewTimeSeries()
 
 	for _, currentCandle := range ec.candleSupplier.Candles() {
@@ -58,6 +67,8 @@ func (ec *EmaCross) Evaluate() (*trade.Signal, bool) {
 
 		stopLossTarget := new(big.Float).Mul(entryTarget, stopLossFactor)
 		takeProfitTarget := new(big.Float).Mul(entryTarget, takeProfitFactor)
+
+		ec.lastSignalTime = time.Now()
 
 		return &trade.Signal{
 			Type:             trade.LONG,
