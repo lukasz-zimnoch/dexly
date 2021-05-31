@@ -63,7 +63,7 @@ func (c *Client) monitorDatabaseMode(ctx context.Context, config *Config) {
 			var isReadonly bool
 			err := c.database.Get(&isReadonly, "SELECT pg_is_in_recovery()")
 			if err != nil {
-				logrus.Error(
+				logrus.Errorf(
 					"could not determine database mode: [%v]",
 					err,
 				)
@@ -78,7 +78,7 @@ func (c *Client) monitorDatabaseMode(ctx context.Context, config *Config) {
 
 				newDatabase, err := connectDatabase(config)
 				if err != nil {
-					logrus.Error(
+					logrus.Errorf(
 						"could not reconnect master database: [%v]",
 						err,
 					)
