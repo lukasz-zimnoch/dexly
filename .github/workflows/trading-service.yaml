@@ -68,12 +68,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Login to Google Container Registry
+      - name: Login to Docker Registry
         uses: docker/login-action@v1
         with:
-          registry: ${{ secrets.GCR_REGISTRY_URL }}
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
           username: _json_key
-          password: ${{ secrets.GCR_ADMIN_KEY }}
+          password: ${{ secrets.DOCKER_REGISTRY_KEY }}
 
       - name: Build and publish Docker image
         id: docker-image
@@ -82,7 +82,10 @@ jobs:
           IMAGE_NAME: 'trading-service'
         with:
           context: ./trading-service
-          tags: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}
+          tags: >-
+            ${{ secrets.DOCKER_REGISTRY_URL }}/
+            ${{ secrets.DOCKER_REPOSITORY_ID }}/
+            ${{ env.IMAGE_NAME }}
           push: true
 
       - name: Update Kubernetes manifest
@@ -93,7 +96,11 @@ jobs:
         with:
           valueFile: '${{ env.IMAGE_NAME }}/deployments/kubernetes/deployment.yaml'
           propertyPath: 'spec.template.spec.containers.0.image'
-          value: ${{ secrets.GCR_REGISTRY_URL }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}
+          value: >-
+            ${{ secrets.DOCKER_REGISTRY_URL }}/
+            ${{ secrets.DOCKER_REPOSITORY_ID }}/
+            ${{ env.IMAGE_NAME }}@
+            ${{ env.IMAGE_DIGEST }}
           branch: 'master'
           message: 'Auto-update of ${{ env.IMAGE_NAME }} manifest'
           commitChange: 'true'

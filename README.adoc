@@ -69,19 +69,31 @@ Each workflow consists of several jobs:
 - `test` which performs unit and integration tests. This job is performed on all
   pushes and pull requests.
 - `publish` which builds the Docker image and publishes it to the registry. This
-  job is performed *only* on pushes to the master branch. This job makes use of
-  the Google Container Registry. The registry is configured as part of the
-  infrastructure described in the <<Cloud infrastructure>> section.
+  job is performed *only* on pushes to the master branch. It also updates the
+  image digest in the Kubernetes manifest and commits that change.
 
 The above jobs need several secrets to be defined in the repository settings:
 
-- `GCP_PROJECT_ID` which should contain the GCP project ID (e.g. `dexly-309412`).
-- `GCR_REGISTRY_URL` which should point to the registry URL (e.g. `gcr.io`).
-- `GCR_ADMIN_KEY` which should contain the GCR admin key in JSON format. A service
-  account for GCR admin is created as part of the infrastructure described in the
-  <<Cloud infrastructure>> section. Account key for this service account is
-  printed as `gcr_admin_key` output.
+- `DOCKER_REGISTRY_URL` which should point to the registry URL.
+- `DOCKER_REPOSITORY_ID` which should contain the image repository name.
+- `DOCKER_REGISTRY_KEY` which should contain the registry key in JSON format.
 
 == Continuous deployment
 
-Work in progress..
+Regarding continuous deployment, several crucial components are configured
+as part of the infrastructure described in <<Cloud infrastructure>> section.
+Those components are:
+
+- GCR which serves as target repository for images built during the `publish`
+  job described in <<Continuous integration>> section.
+- GKE cluster used as environment for containerized services.
+- ArgoCD which is a GitOps delivery tool for Kubernetes
+
+Those parts work together to continuously deploy services as soon as new
+code lands on master. Everything starts once the `publish` job pushes the new
+image to GCR and commits the image digest change made in the service manifest.
+ArgoCD observes the cluster state and compares it against the source Git
+repository, as defined in the `infrastructure/helm/argo-applications` chart.
+In case of divergence (e.g. new image digest is used), ArgoCD makes efforts
+to move the cluster to the desired state. This way microservices are deployed
+in a fully-automated and continuous way.
