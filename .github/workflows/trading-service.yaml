@@ -82,9 +82,7 @@ jobs:
           IMAGE_NAME: 'trading-service'
         with:
           context: ./trading-service
-          tags: '${{ secrets.DOCKER_REGISTRY_URL }}/\
-            ${{ secrets.DOCKER_REPOSITORY_ID }}/\
-            ${{ env.IMAGE_NAME }}'
+          tags: ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_REPOSITORY_ID }}/${{ env.IMAGE_NAME }}'
           push: true
 
       - name: Update Kubernetes manifest
@@ -95,10 +93,7 @@ jobs:
         with:
           valueFile: '${{ env.IMAGE_NAME }}/deployments/kubernetes/deployment.yaml'
           propertyPath: 'spec.template.spec.containers.0.image'
-          value: '${{ secrets.DOCKER_REGISTRY_URL }}/\
-            ${{ secrets.DOCKER_REPOSITORY_ID }}/\
-            ${{ env.IMAGE_NAME }}@\
-            ${{ env.IMAGE_DIGEST }}'
+          value: ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_REPOSITORY_ID }}/${{ env.IMAGE_NAME }}@${{ env.IMAGE_DIGEST }}'
           branch: 'master'
           message: 'Auto-update of ${{ env.IMAGE_NAME }} manifest'
           commitChange: 'true'
