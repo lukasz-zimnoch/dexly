@@ -34,7 +34,7 @@ func (pr *PgRepository) CreatePosition(position *trade.Position) error {
 		)
 	}
 
-	_, err = pr.client.NamedExec(query, pgPosition)
+	_, err = pr.client.Unwrap().NamedExec(query, pgPosition)
 	if err != nil {
 		return fmt.Errorf(
 			"could not execute command for position [%v]: [%v]",
@@ -58,7 +58,7 @@ func (pr *PgRepository) UpdatePosition(position *trade.Position) error {
 		)
 	}
 
-	_, err = pr.client.NamedExec(query, pgPosition)
+	_, err = pr.client.Unwrap().NamedExec(query, pgPosition)
 	if err != nil {
 		return fmt.Errorf(
 			"could not execute command for position [%v]: [%v]",
@@ -102,7 +102,7 @@ func (pr *PgRepository) GetPositions(
 		WHERE p.pair = $1 AND p.exchange = $2 AND p.status = $3
 		ORDER BY o.time ASC`
 
-	err := pr.client.Select(
+	err := pr.client.Unwrap().Select(
 		&selectResult,
 		query,
 		filter.Pair,
@@ -163,7 +163,7 @@ func (pr *PgRepository) CountPositions(
 	query := `SELECT COUNT(*) FROM position 
 		WHERE pair = $1 AND exchange = $2 AND status = $3`
 
-	err := pr.client.Get(
+	err := pr.client.Unwrap().Get(
 		&count,
 		query,
 		filter.Pair,
@@ -195,7 +195,7 @@ func (pr *PgRepository) CreateOrder(order *trade.Order) error {
 		)
 	}
 
-	_, err = pr.client.NamedExec(query, pgOrder)
+	_, err = pr.client.Unwrap().NamedExec(query, pgOrder)
 	if err != nil {
 		return fmt.Errorf(
 			"could not execute command for order [%v]: [%v]",
@@ -219,7 +219,7 @@ func (pr *PgRepository) UpdateOrder(order *trade.Order) error {
 		)
 	}
 
-	_, err = pr.client.NamedExec(query, pgOrder)
+	_, err = pr.client.Unwrap().NamedExec(query, pgOrder)
 	if err != nil {
 		return fmt.Errorf(
 			"could not execute command for order [%v]: [%v]",
