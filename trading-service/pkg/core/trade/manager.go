@@ -73,12 +73,12 @@ func NewManager(
 	}
 }
 
-func (m *Manager) NotifySignal(signal *Signal) {
+func (m *Manager) NotifySignal(signal *Signal) error {
 	m.logger.Infof("received signal [%+v]", signal)
 
 	if signal.Type != LONG {
 		m.logger.Warningf("only LONG signals are currently supported")
-		return
+		return nil
 	}
 
 	openPositionsCount, err := m.repository.CountPositions(
@@ -89,8 +89,7 @@ func (m *Manager) NotifySignal(signal *Signal) {
 		},
 	)
 	if err != nil {
-		m.logger.Errorf("could not count open positions: [%v]", err)
-		return
+		return fmt.Errorf("could not count open positions: [%v]", err)
 	}
 
 	if openPositionsCount >= m.openPositionsLimit {
@@ -99,29 +98,34 @@ func (m *Manager) NotifySignal(signal *Signal) {
 				"open position limit restrictions",
 			signal,
 		)
-		return
+		return nil
 	}
 
 	positionSize, err := m.calculatePositionSize(signal)
 	if err != nil {
-		m.logger.Errorf("could not calculate position size: [%v]", err)
-		return
+		return fmt.Errorf("could not calculate position size: [%v]", err)
+	}
+
+	if positionSize.Cmp(big.NewFloat(0)) == 0 {
+		m.logger.Infof(
+			"dropping signal [%+v] due to insufficient funds",
+			signal,
+		)
+		return nil
 	}
 
 	position, err := m.openPosition(signal, positionSize)
 	if err != nil {
-		m.logger.Errorf("could not open position: [%v]", err)
-		return
+		return fmt.Errorf("could not open position: [%v]", err)
 	}
 
 	_, err = m.createEntryOrder(position)
 	if err != nil {
-		m.logger.Errorf(
+		return fmt.Errorf(
 			"could not create entry order for position [%v]: [%v]",
 			position.ID,
 			err,
 		)
-		return
 	}
 
 	m.logger.Infof(
@@ -130,6 +134,8 @@ func (m *Manager) NotifySignal(signal *Signal) {
 		position.ID,
 		signal,
 	)
+
+	return nil
 }
 
 func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
@@ -139,7 +145,7 @@ func (m *Manager) calculatePositionSize(signal *Signal) (*big.Float, error) {
 	}
 
 	if accountBalance.Cmp(big.NewFloat(0)) == 0 {
-		return nil, fmt.Errorf("account balance is zero")
+		return big.NewFloat(0), nil
 	}
 
 	accountRisk := new(big.Float).Mul(
@@ -245,7 +251,7 @@ func (m *Manager) createExitOrder(
 }
 
 // TODO: check the actually executed price and size
-func (m *Manager) NotifyExecution(order *Order) {
+func (m *Manager) NotifyExecution(order *Order) error {
 	m.logger.Infof(
 		"received notification about order [%v] execution",
 		order.ID,
@@ -254,21 +260,22 @@ func (m *Manager) NotifyExecution(order *Order) {
 	order.Executed = true
 
 	if err := m.repository.UpdateOrder(order); err != nil {
-		m.logger.Errorf(
+		return fmt.Errorf(
 			"could not update order [%v] execution state: [%v]",
 			order.ID,
 			err,
 		)
-		return
 	}
 
 	m.logger.Infof(
 		"execution of order [%v] has been noted successfully",
 		order.ID,
 	)
+
+	return nil
 }
 
-func (m *Manager) RefreshOrdersQueue() []*Order {
+func (m *Manager) RefreshOrdersQueue() ([]*Order, error) {
 	openPositions, err := m.repository.GetPositions(
 		PositionFilter{
 			Pair:     m.pair,
@@ -277,8 +284,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 		},
 	)
 	if err != nil {
-		m.logger.Errorf("could not get open positions: [%v]", err)
-		return nil
+		return nil, fmt.Errorf("could not get open positions: [%v]", err)
 	}
 
 	sort.SliceStable(openPositions, func(i, j int) bool {
@@ -287,8 +293,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 
 	currentPrice, err := m.priceSupplier.Price()
 	if err != nil {
-		m.logger.Errorf("could not determine current price: [%v]", err)
-		return nil
+		return nil, fmt.Errorf("could not determine current price: [%v]", err)
 	}
 
 	pendingOrders := make([]*Order, 0)
@@ -296,18 +301,17 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 	for _, position := range openPositions {
 		entryOrder, exitOrder, err := ordersBreakdown(position)
 		if err != nil {
-			m.logger.Errorf(
+			return nil, fmt.Errorf(
 				"inconsistent orders state for position [%v]: [%v]",
 				position.ID,
 				err,
 			)
-			continue
 		}
 
 		if entryOrder == nil {
 			// just close without trying to recover the entry order
 			if err := m.closePosition(position); err != nil {
-				m.logger.Errorf(
+				return nil, fmt.Errorf(
 					"could not close position [%v]: [%v]",
 					position.ID,
 					err,
@@ -319,7 +323,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 		if !entryOrder.Executed {
 			if time.Now().Sub(entryOrder.Time) > orderValidityTime {
 				if err := m.closePosition(position); err != nil {
-					m.logger.Errorf(
+					return nil, fmt.Errorf(
 						"could not close position [%v]: [%v]",
 						position.ID,
 						err,
@@ -339,13 +343,12 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 			if shouldExit {
 				exitOrder, err := m.createExitOrder(position, currentPrice)
 				if err != nil {
-					m.logger.Errorf(
+					return nil, fmt.Errorf(
 						"could not create exit order "+
 							"for position [%v]: [%v]",
 						position.ID,
 						err,
 					)
-					continue
 				}
 
 				pendingOrders = append(pendingOrders, exitOrder)
@@ -360,7 +363,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 		}
 
 		if err := m.closePosition(position); err != nil {
-			m.logger.Errorf(
+			return nil, fmt.Errorf(
 				"could not close position [%v]: [%v]",
 				position.ID,
 				err,
@@ -368,7 +371,7 @@ func (m *Manager) RefreshOrdersQueue() []*Order {
 		}
 	}
 
-	return pendingOrders
+	return pendingOrders, nil
 }
 
 func ordersBreakdown(position *Position) (*Order, *Order, error) {

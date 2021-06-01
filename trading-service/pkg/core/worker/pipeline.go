@@ -55,35 +55,62 @@ func (p *pipeline) loop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			if signal, exists := p.signaler.Evaluate(); exists {
-				p.manager.NotifySignal(signal)
+				if err := p.manager.NotifySignal(signal); err != nil {
+					p.errChan <- fmt.Errorf(
+						"error during signal processing: [%v]",
+						err,
+					)
+					return
+				}
 			}
 
-			for _, order := range p.manager.RefreshOrdersQueue() {
+			orders, err := p.manager.RefreshOrdersQueue()
+			if err != nil {
+				p.errChan <- fmt.Errorf(
+					"error during orders queue refresh: [%v]",
+					err,
+				)
+				return
+			}
+
+			for _, order := range orders {
 				alreadyExecuted, err := p.executor.IsOrderExecuted(ctx, order)
 				if err != nil {
 					p.errChan <- fmt.Errorf(
-						"could not check order execution: [%v]",
+						"error during order execution check: [%v]",
 						err,
 					)
 					return
 				}
 
 				if alreadyExecuted {
-					p.manager.NotifyExecution(order)
+					if err := p.manager.NotifyExecution(order); err != nil {
+						p.errChan <- fmt.Errorf(
+							"error during order execution notification: [%v]",
+							err,
+						)
+						return
+					}
 					continue
 				}
 
 				executed, err := p.executor.ExecuteOrder(ctx, order)
 				if err != nil {
 					p.errChan <- fmt.Errorf(
-						"could not execute order: [%v]",
+						"error during order execution: [%v]",
 						err,
 					)
 					return
 				}
 
 				if executed {
-					p.manager.NotifyExecution(order)
+					if err := p.manager.NotifyExecution(order); err != nil {
+						p.errChan <- fmt.Errorf(
+							"error during order execution notification: [%v]",
+							err,
+						)
+						return
+					}
 					continue
 				}
 			}
