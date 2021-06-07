@@ -1,0 +1,20 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: trading-database
+  namespace: default
+  labels:
+    app: trading
+spec:
+  teamId: 'trading'
+  volume:
+    size: 1Gi
+  numberOfInstances: 2
+  users:
+    postgres:
+      - superuser
+      - createdb
+  databases:
+    postgres: postgres
+  postgresql:
+    version: "13"

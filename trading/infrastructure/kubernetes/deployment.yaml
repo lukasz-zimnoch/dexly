@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading
+  namespace: default
+  labels:
+    app: trading
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trading
+  template:
+    metadata:
+      labels:
+        app: trading
+    spec:
+      containers:
+        - name: trading
+          image: >-
+            gcr.io/dexly-309412/trading@sha256:3445a577303217149715f4921536303cbf335a21cdc18dc9fb16e69b2cdab0d1
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+              cpu: 1000m
+          env:
+            - name: CONFIG_LOGGING_FORMAT
+              value: json
+            - name: CONFIG_DATABASE_ADDRESS
+              value: trading-database.default.svc.cluster.local
+            - name: CONFIG_DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: >-
+                    postgres.trading-database.credentials.postgresql.acid.zalan.do
+                  key: username
+            - name: CONFIG_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: >-
+                    postgres.trading-database.credentials.postgresql.acid.zalan.do
+                  key: password
+            - name: CONFIG_DATABASE_SSLMODE
+              value: require
+            - name: CONFIG_DATABASE_MIGRATION
+              value: 'true'
+            - name: CONFIG_BINANCE_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: apiKey
+            - name: CONFIG_BINANCE_SECRETKEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: secretKey
+            - name: CONFIG_BINANCE_TESTNET
+              valueFrom:
+                secretKeyRef:
+                  name: binance-config
+                  key: testnet
+            - name: CONFIG_BINANCE_PAIRS
+              value: ETH/USDT
