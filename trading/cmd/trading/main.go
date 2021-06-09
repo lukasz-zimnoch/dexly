@@ -9,7 +9,6 @@ import (
 	"github.com/lukasz-zimnoch/dexly/trading/inmem"
 	"github.com/lukasz-zimnoch/dexly/trading/logrus"
 	"github.com/lukasz-zimnoch/dexly/trading/postgres"
-	"github.com/lukasz-zimnoch/dexly/trading/postgres/migration"
 	"github.com/lukasz-zimnoch/dexly/trading/techan"
 	"os"
 )
@@ -77,29 +76,19 @@ func connectPostgres(
 	logger trading.Logger,
 	config *Database,
 ) (*postgres.Client, error) {
-	postgresConfig := &postgres.Config{
-		Address:  config.Address,
-		User:     config.User,
-		Password: config.Password,
-		Name:     config.Name,
-		SSLMode:  config.SSLMode,
-	}
-
-	if config.Migration {
-		if err := migration.RunPostgresMigration(
-			logger,
-			postgresConfig,
-		); err != nil {
-			return nil, fmt.Errorf(
-				"could not run postgres migration: [%v]",
-				err,
-			)
-		}
+	if err := postgres.RunMigration(
+		logger,
+		(*postgres.Config)(config),
+	); err != nil {
+		return nil, fmt.Errorf(
+			"could not run postgres migration: [%v]",
+			err,
+		)
 	}
 
 	client, err := postgres.NewClient(
 		ctx,
-		postgresConfig,
+		(*postgres.Config)(config),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(

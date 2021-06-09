@@ -46,8 +46,8 @@ spec:
                   key: password
             - name: CONFIG_DATABASE_SSLMODE
               value: require
-            - name: CONFIG_DATABASE_MIGRATION
-              value: 'true'
+            - name: CONFIG_DATABASE_MIGRATIONDIR
+              value: postgres/migration
             - name: CONFIG_BINANCE_APIKEY
               valueFrom:
                 secretKeyRef:

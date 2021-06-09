@@ -3,9 +3,13 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgtype"
 	_ "github.com/jackc/pgx/v4/stdlib"
 	"github.com/jmoiron/sqlx"
+	"github.com/lukasz-zimnoch/dexly/trading"
 	"github.com/sirupsen/logrus"
 	"math/big"
 	"sync"
@@ -13,11 +17,12 @@ import (
 )
 
 type Config struct {
-	Address  string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Address      string
+	User         string
+	Password     string
+	Name         string
+	SSLMode      string
+	MigrationDir string
 }
 
 type Client struct {
@@ -105,6 +110,48 @@ func (c *Client) instance() *sqlx.DB {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.database
+}
+
+func RunMigration(
+	logger trading.Logger,
+	config *Config,
+) error {
+	if len(config.MigrationDir) == 0 {
+		logger.Infof("postgres migration disabled")
+		return nil
+	}
+
+	logger.Infof("starting postgres migration")
+
+	migrationsDir := "file://" + config.MigrationDir
+
+	databaseAddress := fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?sslmode=%s",
+		config.User,
+		config.Password,
+		config.Address,
+		config.Name,
+		config.SSLMode,
+	)
+
+	migration, err := migrate.New(migrationsDir, databaseAddress)
+	if err != nil {
+		return err
+	}
+
+	err = migration.Up()
+	if err != nil {
+		if err == migrate.ErrNoChange {
+			logger.Infof("postgres migration skipped as there are no changes")
+			return nil
+		}
+
+		return err
+	}
+
+	logger.Infof("postgres migration performed successfully")
+
+	return nil
 }
 
 func floatToNumeric(value *big.Float) (pgtype.Numeric, error) {

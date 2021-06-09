@@ -19,12 +19,12 @@ type Logging struct {
 }
 
 type Database struct {
-	Address   string
-	User      string
-	Password  string
-	Name      string
-	SSLMode   string
-	Migration bool
+	Address      string
+	User         string
+	Password     string
+	Name         string
+	SSLMode      string
+	MigrationDir string
 }
 
 type Binance struct {
@@ -50,7 +50,7 @@ func readConfig() (*Config, error) {
 			User:     "postgres",
 			Password: "postgres",
 			Name:     "postgres",
-			SSLMode:  "disabled",
+			SSLMode:  "disable",
 		},
 	}
 

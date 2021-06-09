@@ -20,6 +20,6 @@ ENV WORKDIR=/workdir \
 	BIN_NAME=trading
 
 COPY --from=build $WORKDIR/bin/$BIN_NAME /usr/local/bin
-COPY --from=build $WORKDIR/database/migrations /database/migrations
+COPY --from=build $WORKDIR/postgres/migration /postgres/migration
 
 ENTRYPOINT ["trading"]
