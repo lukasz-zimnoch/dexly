@@ -7,45 +7,30 @@ import (
 	"github.com/sdcoffey/techan"
 	"math/big"
 	"strings"
-	"time"
 )
 
-const strategyBackoff = 5 * time.Minute
-
-// TODO: get rid of the `techan` library
+// TODO: Get rid of the `techan` library.
 type SignalGenerator struct {
-	logger           trading.Logger
-	pair             trading.Pair
-	candleRepository trading.CandleRepository
-	lastSignalTime   time.Time
+	logger trading.Logger
 }
 
 func NewSignalGenerator(
 	logger trading.Logger,
-	pair trading.Pair,
-	candleRepository trading.CandleRepository,
 ) *SignalGenerator {
-	return &SignalGenerator{
-		logger:           logger,
-		pair:             pair,
-		candleRepository: candleRepository,
-		lastSignalTime:   time.Now(),
-	}
+	return &SignalGenerator{logger}
 }
 
-func (sg *SignalGenerator) Poll() (*trading.Signal, bool) {
-	if time.Now().Before(sg.lastSignalTime.Add(strategyBackoff)) {
-		return nil, false
+func (sg *SignalGenerator) Evaluate(
+	candles []*trading.Candle,
+) (*trading.Signal, bool) {
+	series := techan.NewTimeSeries()
+
+	for _, candle := range candles {
+		series.AddCandle(toTechanCandle(candle))
 	}
 
-	candles := techan.NewTimeSeries()
-
-	for _, currentCandle := range sg.candleRepository.Candles() {
-		candles.AddCandle(toTechanCandle(currentCandle))
-	}
-
-	lastIndex := candles.LastIndex()
-	price := techan.NewClosePriceIndicator(candles)
+	lastIndex := series.LastIndex()
+	price := techan.NewClosePriceIndicator(series)
 	priceEma := techan.NewEMAIndicator(price, 50)
 	entryRule := newNearCrossUpIndicatorRule(priceEma, price)
 
@@ -58,17 +43,15 @@ func (sg *SignalGenerator) Poll() (*trading.Signal, bool) {
 			price.Calculate(lastIndex).Float(),
 		)
 
-		priceChangeFactor := 0.025 // TODO: use ATR indicator
+		priceChangeFactor := 0.025 // TODO: Use ATR indicator.
 		stopLossFactor := big.NewFloat(1 - priceChangeFactor)
 		takeProfitFactor := big.NewFloat(1 + (2 * priceChangeFactor))
 
 		stopLossTarget := new(big.Float).Mul(entryTarget, stopLossFactor)
 		takeProfitTarget := new(big.Float).Mul(entryTarget, takeProfitFactor)
 
-		sg.lastSignalTime = time.Now()
-
 		return &trading.Signal{
-			Type:             trading.LONG,
+			Type:             trading.TypeLong,
 			EntryTarget:      entryTarget,
 			TakeProfitTarget: takeProfitTarget,
 			StopLossTarget:   stopLossTarget,

@@ -2,7 +2,6 @@ package trading
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"math"
 	"math/big"
 	"sort"
@@ -12,16 +11,16 @@ import (
 type PositionType int
 
 const (
-	LONG PositionType = iota
-	SHORT
+	TypeLong PositionType = iota
+	TypeShort
 )
 
 func ParsePositionType(value string) (PositionType, error) {
 	switch value {
 	case "LONG":
-		return LONG, nil
+		return TypeLong, nil
 	case "SHORT":
-		return SHORT, nil
+		return TypeShort, nil
 	}
 
 	return -1, fmt.Errorf("unknown position type: [%v]", value)
@@ -29,10 +28,10 @@ func ParsePositionType(value string) (PositionType, error) {
 
 func (pt PositionType) EntryOrderSide() OrderSide {
 	switch pt {
-	case LONG:
-		return BUY
-	case SHORT:
-		return SELL
+	case TypeLong:
+		return SideBuy
+	case TypeShort:
+		return SideSell
 	default:
 		panic("unknown position type")
 	}
@@ -40,10 +39,10 @@ func (pt PositionType) EntryOrderSide() OrderSide {
 
 func (pt PositionType) ExitOrderSide() OrderSide {
 	switch pt {
-	case LONG:
-		return SELL
-	case SHORT:
-		return BUY
+	case TypeLong:
+		return SideSell
+	case TypeShort:
+		return SideBuy
 	default:
 		panic("unknown position type")
 	}
@@ -51,9 +50,9 @@ func (pt PositionType) ExitOrderSide() OrderSide {
 
 func (pt PositionType) String() string {
 	switch pt {
-	case LONG:
+	case TypeLong:
 		return "LONG"
-	case SHORT:
+	case TypeShort:
 		return "SHORT"
 	default:
 		panic("unknown position type")
@@ -63,16 +62,16 @@ func (pt PositionType) String() string {
 type PositionStatus int
 
 const (
-	OPEN PositionStatus = iota
-	CLOSED
+	StatusOpen PositionStatus = iota
+	StatusClosed
 )
 
 func ParsePositionStatus(value string) (PositionStatus, error) {
 	switch value {
 	case "OPEN":
-		return OPEN, nil
+		return StatusOpen, nil
 	case "CLOSED":
-		return CLOSED, nil
+		return StatusClosed, nil
 	}
 
 	return -1, fmt.Errorf("unknown position status: [%v]", value)
@@ -80,9 +79,9 @@ func ParsePositionStatus(value string) (PositionStatus, error) {
 
 func (ps PositionStatus) String() string {
 	switch ps {
-	case OPEN:
+	case StatusOpen:
 		return "OPEN"
-	case CLOSED:
+	case StatusClosed:
 		return "CLOSED"
 	default:
 		panic("unknown position status")
@@ -90,9 +89,8 @@ func (ps PositionStatus) String() string {
 }
 
 type PositionFilter struct {
-	Pair     string
-	Exchange string
-	Status   PositionStatus
+	WorkloadID ID
+	Status     PositionStatus
 }
 
 type PositionRepository interface {
@@ -106,15 +104,14 @@ type PositionRepository interface {
 }
 
 type Position struct {
-	ID              uuid.UUID
+	ID              ID
+	WorkloadID      ID
 	Type            PositionType
 	Status          PositionStatus
 	EntryPrice      *big.Float
 	Size            *big.Float
 	TakeProfitPrice *big.Float
 	StopLossPrice   *big.Float
-	Pair            string
-	Exchange        string
 	Time            time.Time
 	Orders          []*Order
 }
@@ -161,22 +158,23 @@ func (p *Position) OrdersBreakdown() (*Order, *Order, error) {
 }
 
 type PositionOpener struct {
-	repository PositionRepository
+	workloadID         ID
+	walletItem         *AccountWalletItem
+	positionRepository PositionRepository
+	idService          IDService
 }
 
 func (po *PositionOpener) OpenPosition(
 	signal *Signal,
-	account *ExchangeAccount,
 ) (*Position, string, error) {
-	if signal.Type != LONG {
+	if signal.Type != TypeLong {
 		return nil, "only LONG signals are currently supported", nil
 	}
 
-	openPositionsCount, err := po.repository.PositionsCount(
+	openPositionsCount, err := po.positionRepository.PositionsCount(
 		PositionFilter{
-			Pair:     signal.Pair.String(),
-			Exchange: account.Exchange,
-			Status:   OPEN,
+			WorkloadID: po.workloadID,
+			Status:     StatusOpen,
 		},
 	)
 	if err != nil {
@@ -186,12 +184,12 @@ func (po *PositionOpener) OpenPosition(
 		)
 	}
 
-	if openPositionsCount >= account.OpenPositionsLimit {
+	if openPositionsCount >= po.walletItem.OpenPositionsLimit {
 		return nil, "open position limit violated", nil
 	}
 
-	accountBalance := account.AssetBalance(signal.Pair.Quote)
-	accountRisk := new(big.Float).Mul(accountBalance, account.RiskFactor)
+	accountBalance := po.walletItem.Balance
+	accountRisk := new(big.Float).Mul(accountBalance, po.walletItem.RiskFactor)
 	tradeRisk := new(big.Float).Sub(signal.EntryTarget, signal.StopLossTarget)
 	positionSize := new(big.Float).Quo(accountRisk, tradeRisk)
 
@@ -206,15 +204,15 @@ func (po *PositionOpener) OpenPosition(
 
 	takeProfitPrice := new(big.Float).Mul(
 		signal.TakeProfitTarget,
-		new(big.Float).Add(big.NewFloat(1), account.TakerCommission),
+		new(big.Float).Add(big.NewFloat(1), po.walletItem.TakerCommission),
 	)
 
 	stopLossPrice := new(big.Float).Mul(
 		signal.StopLossTarget,
-		new(big.Float).Sub(big.NewFloat(1), account.TakerCommission),
+		new(big.Float).Sub(big.NewFloat(1), po.walletItem.TakerCommission),
 	)
 
-	// TODO: read from exchange info
+	// TODO: Read from exchange info.
 	roundToPrecision := func(value *big.Float) *big.Float {
 		float, _ := value.Float64()
 		precisionPower := math.Pow(10, float64(4))
@@ -222,19 +220,18 @@ func (po *PositionOpener) OpenPosition(
 	}
 
 	position := &Position{
-		ID:              uuid.New(),
+		ID:              po.idService.NewID(),
+		WorkloadID:      po.workloadID,
 		Type:            signal.Type,
-		Status:          OPEN,
+		Status:          StatusOpen,
 		EntryPrice:      roundToPrecision(signal.EntryTarget),
 		Size:            roundToPrecision(positionSize),
 		TakeProfitPrice: roundToPrecision(takeProfitPrice),
 		StopLossPrice:   roundToPrecision(stopLossPrice),
-		Pair:            signal.Pair.String(),
-		Exchange:        account.Exchange,
 		Time:            time.Now(),
 	}
 
-	err = po.repository.CreatePosition(position)
+	err = po.positionRepository.CreatePosition(position)
 	if err != nil {
 		return nil, "", fmt.Errorf("could not persist position: [%v]", err)
 	}
@@ -243,13 +240,13 @@ func (po *PositionOpener) OpenPosition(
 }
 
 type PositionCloser struct {
-	repository PositionRepository
+	positionRepository PositionRepository
 }
 
 func (pc *PositionCloser) ClosePosition(position *Position) error {
-	position.Status = CLOSED
+	position.Status = StatusClosed
 
-	if err := pc.repository.UpdatePosition(position); err != nil {
+	if err := pc.positionRepository.UpdatePosition(position); err != nil {
 		return fmt.Errorf("could not update position: [%v]", err)
 	}
 

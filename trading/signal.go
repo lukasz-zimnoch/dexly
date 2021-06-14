@@ -6,7 +6,6 @@ import (
 )
 
 type Signal struct {
-	Pair             Pair
 	Type             PositionType
 	EntryTarget      *big.Float
 	TakeProfitTarget *big.Float
@@ -15,8 +14,7 @@ type Signal struct {
 
 func (s *Signal) String() string {
 	return fmt.Sprintf(
-		"%v (%v), entry %v, tp: %v, sl: %v",
-		s.Pair.String(),
+		"%v, entry %v, tp: %v, sl: %v",
 		s.Type.String(),
 		s.EntryTarget.Text('f', 2),
 		s.TakeProfitTarget.Text('f', 2),
@@ -25,5 +23,5 @@ func (s *Signal) String() string {
 }
 
 type SignalGenerator interface {
-	Poll() (*Signal, bool)
+	Evaluate(candles []*Candle) (*Signal, bool)
 }

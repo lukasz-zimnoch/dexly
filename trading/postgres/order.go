@@ -2,18 +2,21 @@ package postgres
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/lukasz-zimnoch/dexly/trading"
 	"time"
 )
 
 type OrderRepository struct {
-	client *Client
+	client    *Client
+	idService trading.IDService
 }
 
-func NewOrderRepository(client *Client) *OrderRepository {
-	return &OrderRepository{client}
+func NewOrderRepository(
+	client *Client,
+	idService trading.IDService,
+) *OrderRepository {
+	return &OrderRepository{client, idService}
 }
 
 func (or *OrderRepository) CreateOrder(order *trading.Order) error {
@@ -67,8 +70,8 @@ func (or *OrderRepository) UpdateOrder(order *trading.Order) error {
 }
 
 type orderRow struct {
-	ID         uuid.UUID
-	PositionID uuid.UUID `db:"position_id"`
+	ID         string
+	PositionID string `db:"position_id"`
 	Side       string
 	Price      pgtype.Numeric
 	Size       pgtype.Numeric
@@ -87,8 +90,8 @@ func (or *orderRow) wrap(order *trading.Order) (*orderRow, error) {
 		return nil, err
 	}
 
-	or.ID = order.ID
-	or.PositionID = order.Position.ID
+	or.ID = order.ID.String()
+	or.PositionID = order.Position.ID.String()
 	or.Side = order.Side.String()
 	or.Price = price
 	or.Size = size
@@ -98,7 +101,14 @@ func (or *orderRow) wrap(order *trading.Order) (*orderRow, error) {
 	return or, nil
 }
 
-func (or *orderRow) unwrap() (*trading.Order, error) {
+func (or *orderRow) unwrap(
+	idService trading.IDService,
+) (*trading.Order, error) {
+	ID, err := idService.NewIDFromString(or.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	orderSide, err := trading.ParseOrderSide(or.Side)
 	if err != nil {
 		return nil, err
@@ -115,7 +125,7 @@ func (or *orderRow) unwrap() (*trading.Order, error) {
 	}
 
 	return &trading.Order{
-		ID:       or.ID,
+		ID:       ID,
 		Position: nil, // Position should be set outside
 		Side:     orderSide,
 		Price:    price,

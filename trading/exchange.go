@@ -3,52 +3,35 @@ package trading
 import (
 	"context"
 	"math/big"
+	"time"
 )
 
-type ExchangeCandleService interface {
-	Candles(ctx context.Context, filter *CandleFilter) ([]*Candle, error)
+type ExchangeConnector interface {
+	Connect(ctx context.Context, workload *Workload) (ExchangeService, error)
+}
 
-	CandlesTicker(
-		ctx context.Context,
-		filter *CandleFilter,
-	) (<-chan *CandleTick, <-chan error)
+type ExchangeService interface {
+	ExchangeCandleService
+	ExchangeAccountService
+	ExchangeOrderService
+
+	Workload() *Workload
+}
+
+type ExchangeCandleService interface {
+	Candles(ctx context.Context, start, end time.Time) ([]*Candle, error)
+
+	CandlesTicker(ctx context.Context) (<-chan *CandleTick, <-chan error)
 }
 
 type ExchangeAccountService interface {
-	ExchangeAccount(
-		ctx context.Context,
-		account *Account,
-	) (*ExchangeAccount, error)
+	AccountTakerCommission(ctx context.Context) (*big.Float, error)
+
+	AccountBalances(ctx context.Context) (Balances, error)
 }
 
 type ExchangeOrderService interface {
 	ExecuteOrder(ctx context.Context, order *Order) (bool, error)
 
 	IsOrderExecuted(ctx context.Context, order *Order) (bool, error)
-}
-
-type ExchangeService interface {
-	ExchangeCandleService
-	ExchangeOrderService
-	ExchangeAccountService
-
-	ExchangeName() string
-}
-
-type ExchangeAccount struct {
-	*Account
-
-	Exchange        string
-	Balances        map[Asset]*big.Float
-	TakerCommission *big.Float
-}
-
-func (ea *ExchangeAccount) AssetBalance(asset Asset) *big.Float {
-	for balanceAsset, balanceValue := range ea.Balances {
-		if balanceAsset == asset {
-			return balanceValue
-		}
-	}
-
-	return big.NewFloat(0)
 }

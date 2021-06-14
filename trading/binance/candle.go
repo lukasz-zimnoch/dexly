@@ -4,21 +4,23 @@ import (
 	"context"
 	"github.com/adshao/go-binance"
 	"github.com/lukasz-zimnoch/dexly/trading"
+	"time"
 )
 
 func (es *ExchangeService) Candles(
 	ctx context.Context,
-	filter *trading.CandleFilter,
+	start,
+	end time.Time,
 ) ([]*trading.Candle, error) {
 	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
 	defer cancelRequestCtx()
 
 	klines, err := es.client.
 		NewKlinesService().
-		Symbol(filter.Pair).
-		Interval(filter.Interval).
-		StartTime(filter.StartTime.UnixNano() / 1e6).
-		EndTime(filter.EndTime.UnixNano() / 1e6).
+		Symbol(string(es.workload.Pair.Symbol())).
+		Interval(trading.CandleInterval).
+		StartTime(start.UnixNano() / 1e6).
+		EndTime(end.UnixNano() / 1e6).
 		Limit(1000).
 		Do(requestCtx)
 	if err != nil {
@@ -30,8 +32,6 @@ func (es *ExchangeService) Candles(
 		kline := klines[index]
 
 		candles[index] = &trading.Candle{
-			Pair:       filter.Pair,
-			Exchange:   es.ExchangeName(),
 			OpenTime:   parseMilliseconds(kline.OpenTime),
 			CloseTime:  parseMilliseconds(kline.CloseTime),
 			OpenPrice:  kline.Open,
@@ -48,15 +48,14 @@ func (es *ExchangeService) Candles(
 
 func (es *ExchangeService) CandlesTicker(
 	ctx context.Context,
-	filter *trading.CandleFilter,
 ) (<-chan *trading.CandleTick, <-chan error) {
 	tickChannel := make(chan *trading.CandleTick)
 	errorChannel := make(chan error)
 
 	go func() {
 		_, stopChannel, err := binance.WsKlineServe(
-			filter.Pair,
-			filter.Interval,
+			string(es.workload.Pair.Symbol()),
+			trading.CandleInterval,
 			func(event *binance.WsKlineEvent) {
 				tickChannel <- es.parseKlineEvent(event)
 			},
@@ -81,8 +80,6 @@ func (es *ExchangeService) parseKlineEvent(
 ) *trading.CandleTick {
 	return &trading.CandleTick{
 		Candle: &trading.Candle{
-			Pair:       event.Symbol,
-			Exchange:   es.ExchangeName(),
 			OpenTime:   parseMilliseconds(event.Kline.StartTime),
 			CloseTime:  parseMilliseconds(event.Kline.EndTime),
 			OpenPrice:  event.Kline.Open,

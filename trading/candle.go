@@ -2,13 +2,16 @@ package trading
 
 import (
 	"fmt"
-	"math/big"
 	"time"
 )
 
+// For the time being, we always use the 1m interval and a 12h window size.
+const (
+	CandleInterval   = "1m"
+	CandleWindowSize = 720
+)
+
 type Candle struct {
-	Pair       string
-	Exchange   string
 	OpenTime   time.Time
 	CloseTime  time.Time
 	OpenPrice  string
@@ -32,13 +35,6 @@ func (c *Candle) String() string {
 	)
 }
 
-type CandleFilter struct {
-	Pair      string
-	Interval  string
-	StartTime time.Time
-	EndTime   time.Time
-}
-
 type CandleTick struct {
 	*Candle
 	TickTime time.Time
@@ -49,9 +45,9 @@ func (ct *CandleTick) String() string {
 }
 
 type CandleRepository interface {
-	SaveCandles(candles ...*Candle)
+	SaveCandles(key string, candles ...*Candle)
 
-	Candles() []*Candle
+	Candles(key string) []*Candle
 
-	LastClosePrice() (*big.Float, error)
+	DeleteCandles(key string)
 }

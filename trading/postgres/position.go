@@ -2,18 +2,21 @@ package postgres
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/lukasz-zimnoch/dexly/trading"
 	"time"
 )
 
 type PositionRepository struct {
-	client *Client
+	client    *Client
+	idService trading.IDService
 }
 
-func NewPositionRepository(client *Client) *PositionRepository {
-	return &PositionRepository{client}
+func NewPositionRepository(
+	client *Client,
+	idService trading.IDService,
+) *PositionRepository {
+	return &PositionRepository{client, idService}
 }
 
 func (pr *PositionRepository) CreatePosition(position *trading.Position) error {
@@ -97,14 +100,13 @@ func (pr *PositionRepository) Positions(
        		o.executed "order.executed"
 		FROM position p
 		LEFT JOIN position_order o ON o.position_id = p.id
-		WHERE p.pair = $1 AND p.exchange = $2 AND p.status = $3
+		WHERE p.workload_id = $1 AND p.status = $2
 		ORDER BY o.time ASC`
 
 	err := pr.client.instance().Select(
 		&selectResult,
 		query,
-		filter.Pair,
-		filter.Exchange,
+		filter.WorkloadID,
 		filter.Status.String(),
 	)
 	if err != nil {
@@ -115,10 +117,10 @@ func (pr *PositionRepository) Positions(
 		)
 	}
 
-	positionsByID := make(map[uuid.UUID]*trading.Position)
+	positionsByID := make(map[string]*trading.Position)
 
 	for _, result := range selectResult {
-		order, err := result.orderRow.unwrap()
+		order, err := result.orderRow.unwrap(pr.idService)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"could not convert order [%v] from pg row: [%v]",
@@ -129,7 +131,7 @@ func (pr *PositionRepository) Positions(
 
 		position, exists := positionsByID[result.positionRow.ID]
 		if !exists {
-			position, err = result.positionRow.unwrap()
+			position, err = result.positionRow.unwrap(pr.idService)
 			if err != nil {
 				return nil, fmt.Errorf(
 					"could not convert position [%v] from pg row: [%v]",
@@ -159,13 +161,12 @@ func (pr *PositionRepository) PositionsCount(
 	var count int
 
 	query := `SELECT COUNT(*) FROM position 
-		WHERE pair = $1 AND exchange = $2 AND status = $3`
+		WHERE workload_id = $1 AND status = $2`
 
 	err := pr.client.instance().Get(
 		&count,
 		query,
-		filter.Pair,
-		filter.Exchange,
+		filter.WorkloadID,
 		filter.Status.String(),
 	)
 	if err != nil {
@@ -180,7 +181,8 @@ func (pr *PositionRepository) PositionsCount(
 }
 
 type positionRow struct {
-	ID              uuid.UUID
+	ID              string
+	WorkloadID      string `db:"workload_id"`
 	Type            string
 	Status          string
 	EntryPrice      pgtype.Numeric `db:"entry_price"`
@@ -215,21 +217,32 @@ func (pr *positionRow) wrap(
 		return nil, err
 	}
 
-	pr.ID = position.ID
+	pr.ID = position.ID.String()
+	pr.WorkloadID = position.WorkloadID.String()
 	pr.Type = position.Type.String()
 	pr.Status = position.Status.String()
 	pr.EntryPrice = entryPrice
 	pr.Size = size
 	pr.TakeProfitPrice = takeProfitPrice
 	pr.StopLossPrice = stopLossPrice
-	pr.Pair = position.Pair
-	pr.Exchange = position.Exchange
 	pr.Time = position.Time
 
 	return pr, nil
 }
 
-func (pr *positionRow) unwrap() (*trading.Position, error) {
+func (pr *positionRow) unwrap(
+	idService trading.IDService,
+) (*trading.Position, error) {
+	ID, err := idService.NewIDFromString(pr.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	workloadID, err := idService.NewIDFromString(pr.WorkloadID)
+	if err != nil {
+		return nil, err
+	}
+
 	positionType, err := trading.ParsePositionType(pr.Type)
 	if err != nil {
 		return nil, err
@@ -261,15 +274,14 @@ func (pr *positionRow) unwrap() (*trading.Position, error) {
 	}
 
 	return &trading.Position{
-		ID:              pr.ID,
+		ID:              ID,
+		WorkloadID:      workloadID,
 		Type:            positionType,
 		Status:          positionStatus,
 		EntryPrice:      entryPrice,
 		Size:            size,
 		TakeProfitPrice: takeProfitPrice,
 		StopLossPrice:   stopLossPrice,
-		Pair:            pr.Pair,
-		Exchange:        pr.Exchange,
 		Time:            pr.Time,
 	}, nil
 }

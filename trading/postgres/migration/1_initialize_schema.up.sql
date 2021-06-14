@@ -1,3 +1,5 @@
+-- TODO: Adjust migration scripts.
+
 CREATE TYPE position_type AS ENUM ('LONG', 'SHORT');
 CREATE TYPE position_status AS ENUM ('OPEN', 'CLOSED');
 CREATE TYPE order_side AS ENUM ('BUY', 'SELL');

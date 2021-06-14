@@ -2,7 +2,6 @@ package trading
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"math/big"
 	"time"
 )
@@ -10,16 +9,16 @@ import (
 type OrderSide int
 
 const (
-	BUY OrderSide = iota
-	SELL
+	SideBuy OrderSide = iota
+	SideSell
 )
 
 func ParseOrderSide(value string) (OrderSide, error) {
 	switch value {
 	case "BUY":
-		return BUY, nil
+		return SideBuy, nil
 	case "SELL":
-		return SELL, nil
+		return SideSell, nil
 	}
 
 	return -1, fmt.Errorf("unknown order side: [%v]", value)
@@ -27,9 +26,9 @@ func ParseOrderSide(value string) (OrderSide, error) {
 
 func (os OrderSide) String() string {
 	switch os {
-	case BUY:
+	case SideBuy:
 		return "BUY"
-	case SELL:
+	case SideSell:
 		return "SELL"
 	default:
 		panic("unknown order side")
@@ -43,7 +42,7 @@ type OrderRepository interface {
 }
 
 type Order struct {
-	ID       uuid.UUID
+	ID       ID
 	Position *Position
 	Side     OrderSide
 	Price    *big.Float
@@ -53,14 +52,15 @@ type Order struct {
 }
 
 type OrderFactory struct {
-	repository OrderRepository
+	orderRepository OrderRepository
+	idService       IDService
 }
 
 func (of *OrderFactory) CreateEntryOrder(
 	position *Position,
 ) (*Order, error) {
 	order := &Order{
-		ID:       uuid.New(),
+		ID:       of.idService.NewID(),
 		Position: position,
 		Side:     position.Type.EntryOrderSide(),
 		Price:    position.EntryPrice,
@@ -69,7 +69,7 @@ func (of *OrderFactory) CreateEntryOrder(
 		Executed: false,
 	}
 
-	if err := of.repository.CreateOrder(order); err != nil {
+	if err := of.orderRepository.CreateOrder(order); err != nil {
 		return nil, fmt.Errorf("could not persist order: [%v]", err)
 	}
 
@@ -81,7 +81,7 @@ func (of *OrderFactory) CreateExitOrder(
 	price *big.Float,
 ) (*Order, error) {
 	order := &Order{
-		ID:       uuid.New(),
+		ID:       of.idService.NewID(),
 		Position: position,
 		Side:     position.Type.ExitOrderSide(),
 		Price:    price,
@@ -90,21 +90,21 @@ func (of *OrderFactory) CreateExitOrder(
 		Executed: false,
 	}
 
-	if err := of.repository.CreateOrder(order); err != nil {
+	if err := of.orderRepository.CreateOrder(order); err != nil {
 		return nil, fmt.Errorf("could not persist order: [%v]", err)
 	}
 
 	return order, nil
 }
 
-type OrderExecutionNoter struct {
-	repository OrderRepository
+type OrderExecutionRecorder struct {
+	orderRepository OrderRepository
 }
 
-func (oen *OrderExecutionNoter) NoteOrderExecution(order *Order) error {
+func (oer *OrderExecutionRecorder) recordOrderExecution(order *Order) error {
 	order.Executed = true
 
-	if err := oen.repository.UpdateOrder(order); err != nil {
+	if err := oer.orderRepository.UpdateOrder(order); err != nil {
 		return fmt.Errorf("could not update order: [%v]", err)
 	}
 

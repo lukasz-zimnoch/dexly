@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/lukasz-zimnoch/dexly/trading"
 	"github.com/lukasz-zimnoch/dexly/trading/binance"
-	"github.com/lukasz-zimnoch/dexly/trading/daemon"
 	"github.com/lukasz-zimnoch/dexly/trading/inmem"
 	"github.com/lukasz-zimnoch/dexly/trading/logrus"
 	"github.com/lukasz-zimnoch/dexly/trading/postgres"
 	"github.com/lukasz-zimnoch/dexly/trading/techan"
+	"github.com/lukasz-zimnoch/dexly/trading/uuid"
 	"os"
 )
 
@@ -33,40 +33,19 @@ func main() {
 		logger.Fatalf("could not connect postgres: [%v]", err)
 	}
 
-	binanceExchangeService, err := binance.NewExchangeService(
+	idService := &uuid.IDService{}
+
+	trading.RunWorkloadController(
 		ctx,
-		config.Binance.ApiKey,
-		config.Binance.SecretKey,
-		config.Binance.Testnet,
-	)
-	if err != nil {
-		logger.Fatalf("could not create binance handle: [%v]", err)
-	}
-
-	workerController, err := daemon.RunWorkerController(
+		postgres.NewWorkloadRepository(postgresClient, idService),
+		idService,
+		&exchangeConnector{},
+		inmem.NewCandleRepository(trading.CandleWindowSize),
+		techan.NewSignalGenerator(logger),
+		postgres.NewPositionRepository(postgresClient, idService),
+		postgres.NewOrderRepository(postgresClient, idService),
 		logger,
-		inmem.NewAccountRepository(),
-		func(windowSize int) trading.CandleRepository {
-			return inmem.NewCandleRepository(windowSize)
-		},
-		func(
-			logger trading.Logger,
-			pair trading.Pair,
-			candleRepository trading.CandleRepository,
-		) trading.SignalGenerator {
-			return techan.NewSignalGenerator(logger, pair, candleRepository)
-		},
-		postgres.NewPositionRepository(postgresClient),
-		postgres.NewOrderRepository(postgresClient),
-		binanceExchangeService,
 	)
-	if err != nil {
-		logger.Fatalf("could not run worker controller: [%v]", err)
-	}
-
-	for _, pair := range config.Binance.Pairs {
-		workerController.ActivateWorker(ctx, trading.ParsePair(pair))
-	}
 
 	<-ctx.Done()
 }
@@ -98,4 +77,18 @@ func connectPostgres(
 	}
 
 	return client, nil
+}
+
+type exchangeConnector struct{}
+
+func (ec *exchangeConnector) Connect(
+	ctx context.Context,
+	workload *trading.Workload,
+) (trading.ExchangeService, error) {
+	switch workload.Account.Exchange {
+	case "BINANCE":
+		return binance.NewExchangeService(ctx, workload)
+	default:
+		panic("unknown exchange")
+	}
 }

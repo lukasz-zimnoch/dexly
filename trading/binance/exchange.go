@@ -3,6 +3,7 @@ package binance
 import (
 	"context"
 	"github.com/adshao/go-binance"
+	"github.com/lukasz-zimnoch/dexly/trading"
 	"time"
 )
 
@@ -11,19 +12,17 @@ const requestTimeout = 1 * time.Minute
 type ExchangeService struct {
 	client       *binance.Client
 	exchangeInfo *binance.ExchangeInfo
+	workload     *trading.Workload
 }
 
 func NewExchangeService(
 	ctx context.Context,
-	apiKey,
-	secretKey string,
-	testnet bool,
+	workload *trading.Workload,
 ) (*ExchangeService, error) {
-	client := binance.NewClient(apiKey, secretKey)
-
-	if testnet {
-		client.BaseURL = "https://testnet.binance.vision"
-	}
+	client := binance.NewClient(
+		workload.Account.ExchangeApiKey,
+		workload.Account.ExchangeSecretKey,
+	)
 
 	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
 	defer cancelRequestCtx()
@@ -36,11 +35,12 @@ func NewExchangeService(
 	return &ExchangeService{
 		client:       client,
 		exchangeInfo: exchangeInfo,
+		workload:     workload,
 	}, nil
 }
 
-func (es *ExchangeService) ExchangeName() string {
-	return "BINANCE"
+func (es *ExchangeService) Workload() *trading.Workload {
+	return es.workload
 }
 
 func parseMilliseconds(milliseconds int64) time.Time {

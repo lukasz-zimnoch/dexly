@@ -30,8 +30,6 @@ type Database struct {
 type Binance struct {
 	ApiKey    string
 	SecretKey string
-	Testnet   bool
-	Pairs     []string
 }
 
 func readConfig() (*Config, error) {

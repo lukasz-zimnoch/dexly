@@ -1,3 +1,13 @@
 package trading
 
-// TODO: abstract Google's UUID
+import "fmt"
+
+type ID interface {
+	fmt.Stringer
+}
+
+type IDService interface {
+	NewID() ID
+
+	NewIDFromString(id string) (ID, error)
+}

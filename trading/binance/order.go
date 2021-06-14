@@ -15,7 +15,7 @@ func (es *ExchangeService) ExecuteOrder(
 	requestCtx, cancelRequestCtx := context.WithTimeout(ctx, requestTimeout)
 	defer cancelRequestCtx()
 
-	symbol := order.Position.Pair
+	symbol := string(es.workload.Pair.Symbol())
 	symbolInfo, ok := es.findSymbolInfo(symbol)
 	if !ok {
 		return false, fmt.Errorf("could not find info for symbol: [%v]", symbol)
@@ -67,7 +67,7 @@ func (es *ExchangeService) IsOrderExecuted(
 	defer cancelRequestCtx()
 
 	response, err := es.client.NewGetOrderService().
-		Symbol(order.Position.Pair).
+		Symbol(string(es.workload.Pair.Symbol())).
 		OrigClientOrderID(order.ID.String()).
 		Do(requestCtx)
 	if err != nil {
