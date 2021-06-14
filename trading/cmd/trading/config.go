@@ -10,7 +10,6 @@ import (
 type Config struct {
 	Logging  Logging
 	Database Database
-	Binance  Binance
 }
 
 type Logging struct {
@@ -25,11 +24,6 @@ type Database struct {
 	Name         string
 	SSLMode      string
 	MigrationDir string
-}
-
-type Binance struct {
-	ApiKey    string
-	SecretKey string
 }
 
 func readConfig() (*Config, error) {
