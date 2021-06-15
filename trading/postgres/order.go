@@ -126,7 +126,7 @@ func (or *orderRow) unwrap(
 
 	return &trading.Order{
 		ID:       ID,
-		Position: nil, // Position should be set outside
+		Position: nil, // Position should be set outside.
 		Side:     orderSide,
 		Price:    price,
 		Size:     size,

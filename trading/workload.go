@@ -64,6 +64,7 @@ func RunWorkloadController(
 		positionRepository: positionRepository,
 		orderRepository:    orderRepository,
 		workloads:          make(map[string]*WorkloadRunner),
+		logger:             logger,
 	}
 
 	go workerController.loop(ctx)

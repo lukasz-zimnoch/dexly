@@ -21,10 +21,10 @@ func NewPositionRepository(
 
 func (pr *PositionRepository) CreatePosition(position *trading.Position) error {
 	query := `INSERT INTO 
-    	position (id, type, status, entry_price, size, take_profit_price, 
-    	          stop_loss_price, pair, exchange, time) 
-    	VALUES (:id, :type, :status, :entry_price, :size, :take_profit_price, 
-    	        :stop_loss_price, :pair, :exchange, :time)`
+    	position (id, workload_id, type, status, entry_price, size,  
+    	          take_profit_price, stop_loss_price, time) 
+    	VALUES (:id, :workload_id, :type, :status, :entry_price, :size,  
+    	        :take_profit_price, :stop_loss_price, :time)`
 
 	positionRow, err := new(positionRow).wrap(position)
 	if err != nil {
@@ -82,14 +82,13 @@ func (pr *PositionRepository) Positions(
 	query :=
 		`SELECT 
        		p.id "position.id",
+       		p.workload_id "position.workload_id",
        		p.type "position.type",
        		p.status "position.status",
        		p.entry_price "position.entry_price",
        		p.size "position.size",
        		p.take_profit_price "position.take_profit_price",
        		p.stop_loss_price "position.stop_loss_price",
-       		p.pair "position.pair",
-       		p.exchange "position.exchange",
        		p.time "position.time",
     		o.id "order.id", 
        		o.position_id "order.position_id", 
