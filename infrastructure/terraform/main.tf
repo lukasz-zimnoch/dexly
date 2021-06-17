@@ -14,6 +14,11 @@ terraform {
       source = "hashicorp/helm"
       version = "2.1.2"
     }
+
+    archive = {
+      source = "hashicorp/archive"
+      version = "2.2.0"
+    }
   }
 }
 
@@ -24,6 +29,8 @@ provider "google" {
   region  = var.region.name
   zone    = var.region.zones[0]
 }
+
+provider "archive" {}
 
 resource "google_project_service" "services" {
   for_each                   = toset(var.services)

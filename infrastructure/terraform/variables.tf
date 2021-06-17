@@ -4,6 +4,7 @@ variable "services" {
     "iam.googleapis.com",
     "compute.googleapis.com",
     "container.googleapis.com",
+    "cloudbuild.googleapis.com"
   ]
 }
 
@@ -71,5 +72,35 @@ variable "cloud_nat" {
   default = {
     name        = "dexly-cloud-nat"
     router_name = "dexly-cloud-router"
+  }
+}
+
+variable "cloud_functions" {
+  type        = map(string)
+  description = "Cloud functions info"
+
+  default = {
+    archives_bucket_name = "dexly-cloud-functions-archives-bucket"
+
+    notification_function_name = "dexly-notification-function"
+  }
+}
+
+variable "pubsub" {
+  type        = map(string)
+  description = "PubSub info"
+
+  default = {
+    notifications_topic_name = "dexly-notifications-topic"
+  }
+}
+
+variable "mail_config" {
+  type        = map(string)
+  description = "Configuration of the mail sender"
+  sensitive   = true
+
+  default = {
+    password = ""
   }
 }
