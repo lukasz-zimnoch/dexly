@@ -6,12 +6,12 @@ on:
       - master
     paths:
       - "trading/**"
-      - ".github/workflows/trading.yml"
+      - ".github/workflows/trading.yaml"
   pull_request:
     branches:
     paths:
       - "trading/**"
-      - ".github/workflows/trading.yml"
+      - ".github/workflows/trading.yaml"
   workflow_dispatch:
 
 jobs:
