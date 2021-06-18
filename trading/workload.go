@@ -121,6 +121,7 @@ func (wc *WorkloadController) loop(ctx context.Context) {
 					wc.signalGenerator,
 					wc.positionRepository,
 					wc.orderRepository,
+					wc.eventService,
 					workloadLogger,
 				)
 
