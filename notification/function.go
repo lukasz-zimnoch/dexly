@@ -29,19 +29,19 @@ type PubSubMessage struct {
 	Data []byte `json:"data"`
 }
 
-func ProcessNotification(ctx context.Context, message PubSubMessage) error {
+func ProcessEvent(ctx context.Context, message PubSubMessage) error {
 	if err := initializeMailService(); err != nil {
 		return fmt.Errorf("could not initialize mail service: [%v]", err)
 	}
 
-	var notification Notification
+	var event Event
 
-	err := json.Unmarshal(message.Data, &notification)
+	err := json.Unmarshal(message.Data, &event)
 	if err != nil {
-		return fmt.Errorf("could not unmarshal message: [%v]", err)
+		return fmt.Errorf("could not unmarshal pubsub message: [%v]", err)
 	}
 
-	err = mailService.Send(&notification)
+	err = mailService.ProcessEvent(&event)
 	if err != nil {
 		return fmt.Errorf("mail service error: [%v]", err)
 	}

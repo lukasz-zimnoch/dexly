@@ -32,7 +32,7 @@ resource "google_cloudfunctions_function" "notification" {
   name        = var.cloud_functions.notification_function_name
   runtime     = "go113"
 
-  entry_point           = "ProcessNotification"
+  entry_point           = "ProcessEvent"
   available_memory_mb   = 128
   source_archive_bucket = google_storage_bucket.cloud_functions_archives.name
   source_archive_object = google_storage_bucket_object.notification_function.name

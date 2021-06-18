@@ -20,12 +20,12 @@ func NewMailService(auth *MailConfig) *MailService {
 	return &MailService{auth}
 }
 
-func (ms *MailService) Send(notification *Notification) error {
+func (ms *MailService) ProcessEvent(event *Event) error {
 	message := mail.NewMessage()
 	message.SetHeader("From", ms.config.Username)
-	message.SetHeader("To", notification.AccountEmail)
+	message.SetHeader("To", event.Email)
 	message.SetHeader("Subject", "Dexly notification")
-	message.SetBody("text/plain", notification.Payload)
+	message.SetBody("text/plain", event.Payload)
 
 	dialer := mail.NewDialer(
 		ms.config.Host,
