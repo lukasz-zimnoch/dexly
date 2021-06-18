@@ -1,4 +1,4 @@
 package grpc
 
-// TODO: Implementation of a GRPC server.
+// TODO: Implementation of the GRPC server.
 type Server struct{}

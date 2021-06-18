@@ -14,6 +14,7 @@ import (
 	"os"
 )
 
+// TODO: Metrics and monitoring.
 func main() {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	defer cancelCtx()

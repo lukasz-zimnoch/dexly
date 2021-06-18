@@ -1,5 +1,7 @@
 package trading
 
+// TODO: Improve logging in the entire service.
+//  Add logging component info and leverage additional fields.
 type Logger interface {
 	Debugf(format string, args ...interface{})
 

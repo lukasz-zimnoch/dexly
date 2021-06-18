@@ -213,7 +213,7 @@ func (po *PositionOpener) OpenPosition(
 		new(big.Float).Sub(big.NewFloat(1), po.walletItem.TakerCommission),
 	)
 
-	// TODO: Read from exchange info.
+	// TODO: Read precision from exchange info.
 	roundToPrecision := func(value *big.Float) *big.Float {
 		float, _ := value.Float64()
 		precisionPower := math.Pow(10, float64(4))

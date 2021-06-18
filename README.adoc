@@ -97,3 +97,5 @@ repository, as defined in the `infrastructure/helm/argo-applications` chart.
 In case of divergence (e.g. new image digest is used), ArgoCD makes efforts
 to move the cluster to the desired state. This way microservices are deployed
 in a fully-automated and continuous way.
+
+// TODO: Complete readme.

@@ -20,6 +20,7 @@ func NewSignalGenerator(
 	return &SignalGenerator{logger}
 }
 
+// TODO: Improve the strategy and make it more accurate.
 func (sg *SignalGenerator) Evaluate(
 	candles []*trading.Candle,
 ) (*trading.Signal, bool) {
