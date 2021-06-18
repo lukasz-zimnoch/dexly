@@ -3,6 +3,7 @@ module github.com/lukasz-zimnoch/dexly/trading
 go 1.15
 
 require (
+	cloud.google.com/go/pubsub v1.11.0
 	github.com/adshao/go-binance v0.0.0-20201221124815-35bd9c8231f3
 	github.com/golang-migrate/migrate/v4 v4.14.1
 	github.com/google/uuid v1.2.0

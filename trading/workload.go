@@ -37,6 +37,7 @@ type WorkloadController struct {
 	signalGenerator    SignalGenerator
 	positionRepository PositionRepository
 	orderRepository    OrderRepository
+	eventService       EventService
 
 	workloadsMutex sync.Mutex
 	workloads      map[string]*WorkloadRunner
@@ -53,6 +54,7 @@ func RunWorkloadController(
 	signalGenerator SignalGenerator,
 	positionRepository PositionRepository,
 	orderRepository OrderRepository,
+	eventService EventService,
 	logger Logger,
 ) *WorkloadController {
 	workerController := &WorkloadController{
@@ -63,6 +65,7 @@ func RunWorkloadController(
 		signalGenerator:    signalGenerator,
 		positionRepository: positionRepository,
 		orderRepository:    orderRepository,
+		eventService:       eventService,
 		workloads:          make(map[string]*WorkloadRunner),
 		logger:             logger,
 	}
@@ -155,6 +158,7 @@ type WorkloadRunner struct {
 	signalGenerator    SignalGenerator
 	positionRepository PositionRepository
 	orderRepository    OrderRepository
+	eventService       EventService
 
 	logger  Logger
 	errChan chan error
@@ -171,6 +175,7 @@ func RunWorkload(
 	signalGenerator SignalGenerator,
 	positionRepository PositionRepository,
 	orderRepository OrderRepository,
+	eventService EventService,
 	logger Logger,
 ) *WorkloadRunner {
 	workloadRunner := &WorkloadRunner{
@@ -181,6 +186,7 @@ func RunWorkload(
 		signalGenerator:    signalGenerator,
 		positionRepository: positionRepository,
 		orderRepository:    orderRepository,
+		eventService:       eventService,
 		logger:             logger,
 		errChan:            make(chan error, 1),
 		lastSignalTime:     time.Now(),
@@ -358,10 +364,11 @@ func (wr *WorkloadRunner) processSignal(
 	}
 
 	positionOpener := &PositionOpener{
-		workloadID:         wr.workload.ID,
+		workload:           wr.workload,
 		walletItem:         walletItem,
 		positionRepository: wr.positionRepository,
 		idService:          wr.idService,
+		eventService:       wr.eventService,
 	}
 	position, dropped, err := positionOpener.OpenPosition(signal)
 	if err != nil {
@@ -419,7 +426,11 @@ func (wr *WorkloadRunner) refreshOrdersQueue() ([]*Order, error) {
 		)
 	}
 
-	positionCloser := &PositionCloser{wr.positionRepository}
+	positionCloser := &PositionCloser{
+		workload:           wr.workload,
+		positionRepository: wr.positionRepository,
+		eventService:       wr.eventService,
+	}
 	orderFactory := &OrderFactory{
 		orderRepository: wr.orderRepository,
 		idService:       wr.idService,

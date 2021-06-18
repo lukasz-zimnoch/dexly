@@ -8,6 +8,7 @@ import (
 	"github.com/lukasz-zimnoch/dexly/trading/inmem"
 	"github.com/lukasz-zimnoch/dexly/trading/logrus"
 	"github.com/lukasz-zimnoch/dexly/trading/postgres"
+	"github.com/lukasz-zimnoch/dexly/trading/pubsub"
 	"github.com/lukasz-zimnoch/dexly/trading/techan"
 	"github.com/lukasz-zimnoch/dexly/trading/uuid"
 	"os"
@@ -35,6 +36,15 @@ func main() {
 
 	idService := &uuid.IDService{}
 
+	pubsubClient, err := pubsub.NewClient(
+		ctx,
+		config.Pubsub.ProjectID,
+		config.Pubsub.NotificationsTopicID,
+	)
+	if err != nil {
+		logger.Fatalf("could not get pubsub client: [%v]", err)
+	}
+
 	trading.RunWorkloadController(
 		ctx,
 		postgres.NewWorkloadRepository(postgresClient, idService),
@@ -44,6 +54,7 @@ func main() {
 		techan.NewSignalGenerator(logger),
 		postgres.NewPositionRepository(postgresClient, idService),
 		postgres.NewOrderRepository(postgresClient, idService),
+		pubsub.NewEventService(pubsubClient, logger),
 		logger,
 	)
 

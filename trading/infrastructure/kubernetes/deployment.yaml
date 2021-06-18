@@ -27,7 +27,7 @@ spec:
             limits:
               memory: 512Mi
               cpu: 1000m
-          env:
+          env: # TODO: Manage config with Terraform.
             - name: CONFIG_LOGGING_FORMAT
               value: json
             - name: CONFIG_DATABASE_ADDRESS
@@ -48,3 +48,7 @@ spec:
               value: require
             - name: CONFIG_DATABASE_MIGRATIONDIR
               value: postgres/migration
+            - name: CONFIG_PUBSUB_PROJECTID
+              value: dexly-309412
+            - name: CONFIG_PUBSUB_NOTIFICATIONSTOPICID
+              value: dexly-notifications-topic

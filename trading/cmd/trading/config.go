@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Logging  Logging
 	Database Database
+	Pubsub   Pubsub
 }
 
 type Logging struct {
@@ -24,6 +25,11 @@ type Database struct {
 	Name         string
 	SSLMode      string
 	MigrationDir string
+}
+
+type Pubsub struct {
+	ProjectID            string
+	NotificationsTopicID string
 }
 
 func readConfig() (*Config, error) {

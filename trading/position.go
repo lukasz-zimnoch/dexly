@@ -158,10 +158,11 @@ func (p *Position) OrdersBreakdown() (*Order, *Order, error) {
 }
 
 type PositionOpener struct {
-	workloadID         ID
+	workload           *Workload
 	walletItem         *AccountWalletItem
 	positionRepository PositionRepository
 	idService          IDService
+	eventService       EventService
 }
 
 func (po *PositionOpener) OpenPosition(
@@ -173,7 +174,7 @@ func (po *PositionOpener) OpenPosition(
 
 	openPositionsCount, err := po.positionRepository.PositionsCount(
 		PositionFilter{
-			WorkloadID: po.workloadID,
+			WorkloadID: po.workload.ID,
 			Status:     StatusOpen,
 		},
 	)
@@ -221,7 +222,7 @@ func (po *PositionOpener) OpenPosition(
 
 	position := &Position{
 		ID:              po.idService.NewID(),
-		WorkloadID:      po.workloadID,
+		WorkloadID:      po.workload.ID,
 		Type:            signal.Type,
 		Status:          StatusOpen,
 		EntryPrice:      roundToPrecision(signal.EntryTarget),
@@ -236,11 +237,15 @@ func (po *PositionOpener) OpenPosition(
 		return nil, "", fmt.Errorf("could not persist position: [%v]", err)
 	}
 
+	po.eventService.Publish(NewPositionOpenedEvent(po.workload, position))
+
 	return position, "", nil
 }
 
 type PositionCloser struct {
+	workload           *Workload
 	positionRepository PositionRepository
+	eventService       EventService
 }
 
 func (pc *PositionCloser) ClosePosition(position *Position) error {
@@ -249,6 +254,8 @@ func (pc *PositionCloser) ClosePosition(position *Position) error {
 	if err := pc.positionRepository.UpdatePosition(position); err != nil {
 		return fmt.Errorf("could not update position: [%v]", err)
 	}
+
+	pc.eventService.Publish(NewPositionClosedEvent(pc.workload, position))
 
 	return nil
 }
