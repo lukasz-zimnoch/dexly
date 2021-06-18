@@ -18,7 +18,7 @@ spec:
       containers:
         - name: trading
           image: >-
-            gcr.io/dexly-309412/trading@sha256:017e36a6e06acd9d95ce4e84e5311ecff429df7bc9a15f9284f73b2c7f16e7d9
+            gcr.io/dexly-309412/trading@sha256:88600b09dab2e216259dcb831f16b5b01954f35e00ca40af9ed59c3513fb6c12
           imagePullPolicy: Always
           resources:
             requests:
@@ -27,7 +27,7 @@ spec:
             limits:
               memory: 512Mi
               cpu: 1000m
-          env: # TODO: Manage config with Terraform.
+          env:
             - name: CONFIG_LOGGING_FORMAT
               value: json
             - name: CONFIG_DATABASE_ADDRESS
