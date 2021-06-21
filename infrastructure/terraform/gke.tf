@@ -92,3 +92,17 @@ resource "helm_release" "postgres_operator" {
   name  = "postgres-operator"
   chart = "https://github.com/zalando/postgres-operator/raw/v1.6.2/charts/postgres-operator/postgres-operator-1.6.2.tgz"
 }
+
+# ------------------------------------------------------------------------------
+# Workload identity configuration.
+# ------------------------------------------------------------------------------
+
+module "trading_workload_identity" {
+  source     = "terraform-google-modules/kubernetes-engine/google//modules/workload-identity"
+  version    = "15.0.0"
+  depends_on = [module.gke]
+
+  project_id = var.project.id
+  name       = "trading"
+  namespace  = "default"
+}
