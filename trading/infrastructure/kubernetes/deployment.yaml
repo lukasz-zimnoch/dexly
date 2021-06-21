@@ -15,7 +15,7 @@ spec:
       labels:
         app: trading
     spec:
-      serviceAccountName: trading-service-account
+      serviceAccountName: trading
       containers:
         - name: trading
           image: >-
