@@ -6,6 +6,7 @@ resource "google_storage_bucket" "cloud_functions_archives" {
   name = var.cloud_functions.archives_bucket_name
 
   uniform_bucket_level_access = true
+  force_destroy               = true
 
   versioning {
     enabled = true
