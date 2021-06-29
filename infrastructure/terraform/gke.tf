@@ -72,6 +72,7 @@ resource "google_storage_bucket_iam_member" "gke_sa-gcr_object_viewer" {
 # ------------------------------------------------------------------------------
 
 resource "helm_release" "argo_cd" {
+  depends_on = [module.gke]
   name       = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
@@ -89,8 +90,9 @@ resource "helm_release" "argo_applications" {
 # ------------------------------------------------------------------------------
 
 resource "helm_release" "postgres_operator" {
-  name  = "postgres-operator"
-  chart = "https://github.com/zalando/postgres-operator/raw/v1.6.2/charts/postgres-operator/postgres-operator-1.6.2.tgz"
+  depends_on = [module.gke]
+  name       = "postgres-operator"
+  chart      = "https://github.com/zalando/postgres-operator/raw/v1.6.2/charts/postgres-operator/postgres-operator-1.6.2.tgz"
 }
 
 # ------------------------------------------------------------------------------
