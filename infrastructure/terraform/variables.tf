@@ -101,6 +101,6 @@ variable "mail_config" {
   sensitive   = true
 
   default = {
-    password = ""
+    password = "" # TODO: Prevent resetting.
   }
 }
